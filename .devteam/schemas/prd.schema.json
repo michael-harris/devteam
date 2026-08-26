@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devteam.internal/schemas/prd.schema.json",
+  "title": "DevTeam Project PRD",
+  "description": "Canonical schema for docs/planning/PROJECT_PRD.json. Adopted verbatim from agents/planning/prd-generator.md's Output Format section per Architecture Audit Phase 1 ('adopt prd-generator.md's [schema], since it's strictly more complete'), NOT from commands/devteam-plan.md's inline Phase 4 schema, which uses a different, incompatible shape (features.{must_have,nice_to_have} with F-prefixed ids instead of requirements.{must_have,should_have,out_of_scope} with REQ-prefixed ids) that agents/planning/task-graph-analyzer.md already assumes is retired (task-graph-analyzer.md:22 reads 'must-have and should-have requirements', prd-generator.md's vocabulary, not devteam-plan.md's). commands/devteam-plan.md's inline PRD generation is superseded, not reconciled, by this schema -- Architecture Audit Phase 2 deletes that inline code path in favor of calling prd-generator.md directly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project", "technology", "problem", "solution", "users",
+    "requirements", "technical", "success_criteria", "constraints"
+  ],
+  "properties": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "created"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "created": { "type": "string" }
+      }
+    },
+    "technology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "frontend", "database", "testing"],
+      "properties": {
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["language", "framework"],
+          "properties": {
+            "language": { "type": "string" },
+            "framework": { "type": "string" },
+            "reasoning": { "type": "string" }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["framework"],
+          "properties": {
+            "framework": { "type": "string" }
+          }
+        },
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system"],
+          "properties": {
+            "system": { "type": "string" },
+            "orm": { "type": "string" }
+          }
+        },
+        "testing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "backend": { "type": "string" },
+            "frontend": { "type": "string" }
+          }
+        }
+      }
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "target_users"],
+      "properties": {
+        "statement": { "type": "string", "minLength": 1 },
+        "target_users": { "type": "string" },
+        "current_solutions": { "type": "string" }
+      }
+    },
+    "solution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overview"],
+      "properties": {
+        "overview": { "type": "string", "minLength": 1 },
+        "value_proposition": { "type": "string" },
+        "key_features": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "users": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["persona"],
+            "properties": {
+              "persona": { "type": "string" },
+              "needs": { "type": "string" },
+              "goals": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["must_have"],
+      "description": "Canonical requirement vocabulary: 'requirements' (not 'features'), REQ-XXX ids (not F-XXX), must_have/should_have/out_of_scope (not must_have/nice_to_have). See prd-generator.md Phase 3 and Phase 8's REQ-linked feature enumeration.",
+      "properties": {
+        "must_have": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/requirement" }
+        },
+        "should_have": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requirement" }
+        },
+        "out_of_scope": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "non_functional_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "performance": { "type": "array", "items": { "type": "string" } },
+        "security": { "type": "array", "items": { "type": "string" } },
+        "scalability": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "technical": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "integrations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "purpose"],
+            "properties": {
+              "name": { "type": "string" },
+              "purpose": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "performance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "target"],
+            "properties": {
+              "metric": { "type": "string" },
+              "target": { "type": "string" }
+            }
+          }
+        },
+        "scale": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "users": { "type": "string" },
+            "requests": { "type": "string" }
+          }
+        }
+      }
+    },
+    "success_criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mvp_complete_when"],
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "target"],
+            "properties": {
+              "metric": { "type": "string" },
+              "target": { "type": "string" },
+              "measurement": { "type": "string" }
+            }
+          }
+        },
+        "mvp_complete_when": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeline": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "mvp_deadline": { "type": "string" } }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "limit": { "type": "string" } }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requirements": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "compliance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "standards": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["risk", "mitigation"],
+        "properties": {
+          "risk": { "type": "string" },
+          "mitigation": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^REQ-[0-9]{3,}$" },
+        "description": { "type": "string", "minLength": 1 },
+        "acceptance_criteria": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+      }
+    }
+  }
+}

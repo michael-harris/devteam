@@ -9,6 +9,8 @@ tools: Read, Glob, Grep, Bash, Write
 **Model:** sonnet
 **Purpose:** Interactive PRD creation through structured Q&A with technology stack selection
 
+**Canonical Schema:** `.devteam/schemas/prd.schema.json` (for `docs/planning/PROJECT_PRD.json`) and `.devteam/schemas/features.schema.json` (for `.devteam/features.json`) — the Output Format and Additional Output sections below are the source both were generated from; keep them in sync if either changes.
+
 ## Your Role
 
 You create comprehensive Product Requirement Documents through an interactive interview process. Your first and most important question determines the technology stack based on project needs.

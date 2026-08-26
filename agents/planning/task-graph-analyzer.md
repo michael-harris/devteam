@@ -9,6 +9,8 @@ tools: Read, Glob, Grep, Bash, Write
 **Model:** sonnet
 **Purpose:** Decompose PRD into discrete, implementable tasks with dependency analysis
 
+**Canonical Schema:** `.devteam/schemas/task.schema.json` — every `TASK-XXX.json` file this agent writes must validate against it. Read `.devteam/schemas/README.md` first if you haven't.
+
 ## Your Role
 
 You break down Product Requirement Documents into specific, implementable tasks with clear acceptance criteria, dependencies, and task type identification.
@@ -28,10 +30,13 @@ Extract all features from must-have and should-have requirements
 - `backend`: API and database without frontend
 - `frontend`: UI components using existing API
 - `database`: Schema and models only
-- `python-generic`: Python utilities, scripts, CLI tools, algorithms
+- `testing`: Test-writing tasks not folded into their implementation task
 - `infrastructure`: CI/CD, deployment, configuration
+- `python-generic`: Python utilities, scripts, CLI tools, algorithms
+- `design`: UI/UX design-system work that must complete before a dependent frontend/mobile task starts (see Architecture Audit §5 — every UI-bearing task chain needs one of these upstream of it, or the implementer gets no design input)
+- `data_architecture`: Schema/data-model design work, distinct from `database` (schema *implementation*)
 
-**Task Sizing:** 1-2 days maximum (4-16 hours)
+**Task Sizing:** 1-2 days maximum (4-16 hours) — see `estimated_hours` below; this is guidance, not a hard schema limit.
 
 ### 4. Analyze Dependencies
 Build dependency graph with no circular dependencies
@@ -72,7 +77,39 @@ At any given time, 2 tasks can run in parallel:
 - Recommendation for optimal parallelization
 
 ### 6. Generate Task Files
-Create `docs/planning/tasks/TASK-XXX.json` for each task
+Create `docs/planning/tasks/TASK-XXX.json` for each task, matching `.devteam/schemas/task.schema.json` exactly:
+
+```json
+{
+  "id": "TASK-001",
+  "title": "[Task title]",
+  "description": "[Detailed description]",
+  "feature_ref": "REQ-001",
+  "task_type": "backend | frontend | fullstack | database | testing | infrastructure | python-generic | design | data_architecture",
+  "complexity": {
+    "score": 6,
+    "factors": {
+      "files_affected": 4,
+      "estimated_lines": 150,
+      "new_dependencies": 1,
+      "risk_flags": []
+    }
+  },
+  "estimated_hours": 8,
+  "dependencies": ["TASK-000"],
+  "acceptance_criteria": [
+    "[Criterion 1]",
+    "[Criterion 2]"
+  ],
+  "suggested_agent": "backend:api-developer-{language} | frontend:developer | ux:ux-system-coordinator | ..."
+}
+```
+
+**Two sizing fields, both required, feeding two different downstream consumers — do not skip either:**
+- `complexity.score` (0-14) and `complexity.factors` feed `.devteam/model-selection.md`'s per-attempt model selection. `files_affected`, `estimated_lines`, `new_dependencies`, and `risk_flags` (only `security_sensitive`, `external_integration`, `breaking_change` currently add to the score — other flags are accepted but not yet scored) are the exact factor names that algorithm reads.
+- `estimated_hours` feeds `agents/planning/sprint-planner.md`'s balanced track-assignment algorithm, which sums this field per dependency chain.
+
+`feature_ref` uses the PRD's `REQ-XXX` requirement ids (from `.devteam/schemas/prd.schema.json`), not the feature-enumeration `FEAT-XXX` ids from `.devteam/features.json` — those are a separate, more granular id space for verification tracking, not for task-to-requirement traceability.
 
 ### 7. Create Summary
 Generate `docs/planning/TASK_SUMMARY.md`

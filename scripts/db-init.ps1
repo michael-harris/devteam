@@ -11,9 +11,10 @@ $SCHEMA_FILE = Join-Path $SCRIPT_DIR "schema.sql"
 $SCHEMA_V2_FILE = Join-Path $SCRIPT_DIR "schema-v2.sql"
 $SCHEMA_V3_FILE = Join-Path $SCRIPT_DIR "schema-v3.sql"
 $SCHEMA_V4_FILE = Join-Path $SCRIPT_DIR "schema-v4.sql"
+$SCHEMA_V5_FILE = Join-Path $SCRIPT_DIR "schema-v5.sql"
 
 # Current schema version - increment when schema changes
-$SCHEMA_VERSION = 4
+$SCHEMA_VERSION = 5
 
 function Write-DevTeamInfo {
     param([string]$Message)
@@ -71,7 +72,10 @@ function Get-DbSchemaVersion {
     }
 
     # Get the version
-    $version = & sqlite3 $DB_FILE "SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1;" 2>$null
+    # Order by version DESC (not just applied_at DESC): CURRENT_TIMESTAMP has only
+    # second-level resolution, so two migrations applied in the same second tie on
+    # applied_at and SQLite's tie-break order is unspecified without this.
+    $version = & sqlite3 $DB_FILE "SELECT version FROM schema_version ORDER BY version DESC, applied_at DESC LIMIT 1;" 2>$null
     if (-not $version) { return 0 }
     return [int]$version
 }
@@ -125,6 +129,22 @@ function Invoke-Migrations {
                 exit 1
             }
             Write-DevTeamInfo "Applied schema v4: plans.research_session_id ON DELETE SET NULL"
+        }
+    }
+
+    # Migration v4 -> v5: Add agent_runs call-hierarchy columns
+    if ($FromVersion -lt 5) {
+        Write-DevTeamInfo "Running migration v4 -> v5..."
+        if (Test-Path $SCHEMA_V5_FILE) {
+            $v5Content = Get-Content $SCHEMA_V5_FILE -Raw
+            try {
+                & sqlite3 $DB_FILE "BEGIN TRANSACTION; $v5Content COMMIT;"
+            } catch {
+                & sqlite3 $DB_FILE "ROLLBACK;" 2>$null
+                Write-DevTeamError "Failed to apply schema v5 migration"
+                exit 1
+            }
+            Write-DevTeamInfo "Applied schema v5: agent_runs.invoked_by_agent / invoked_by_run_id"
         }
     }
 
@@ -208,6 +228,18 @@ function Initialize-Database {
                 exit 1
             }
             Write-DevTeamInfo "Applied schema v4 (plans.research_session_id ON DELETE SET NULL)"
+        }
+
+        # Apply schema v5
+        if (Test-Path $SCHEMA_V5_FILE) {
+            $v5Content = Get-Content $SCHEMA_V5_FILE -Raw
+            try {
+                & sqlite3 $DB_FILE $v5Content
+            } catch {
+                Write-DevTeamError "Failed to apply schema v5"
+                exit 1
+            }
+            Write-DevTeamInfo "Applied schema v5 (agent_runs call-hierarchy columns)"
         }
 
         # Record schema version

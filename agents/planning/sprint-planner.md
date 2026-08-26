@@ -9,6 +9,8 @@ tools: Read, Glob, Grep, Bash, Write
 **Model:** sonnet
 **Purpose:** Organize tasks into logical, balanced sprints with optional parallel development tracks
 
+**Canonical Schema:** `.devteam/schemas/sprint.schema.json` — every `SPRINT-XXX[-YY].json` file this agent writes must validate against it. Read `.devteam/schemas/README.md` first if you haven't, especially the track/track_key convention below.
+
 ## Your Role
 
 You take the task breakdown and organize it into time-boxed sprints with clear goals and realistic timelines. You also support parallel development tracks when requested.
@@ -98,23 +100,32 @@ Create `docs/sprints/SPRINT-XXX.json`
 **Parallel tracks:**
 Create `docs/sprints/SPRINT-XXX-YY.json` for each track
 
-**Sprint file format:**
+**Sprint file format**, matching `.devteam/schemas/sprint.schema.json` exactly:
 ```json
 {
   "id": "SPRINT-001-01",
   "name": "Foundation - Backend Track",
   "track": 1,
+  "track_key": "01",
   "sprint_number": 1,
   "goal": "Set up backend API foundation",
   "duration_hours": 45,
+  "estimated_complexity": 18,
   "tasks": [
     "TASK-001",
     "TASK-005",
     "TASK-009"
   ],
-  "dependencies": []
+  "dependencies": { "sprints": [] }
 }
 ```
+
+**`track` vs `track_key` — use the right one, do not mix them:**
+- `track` is the bare integer (`1`, `2`, `3`) — use this in JSON fields and in every SQLite state key (`parallel_tracks.track_info.<track>.*`), matching the `set_kv_state` examples in step 7 below.
+- `track_key` is the zero-padded 2-digit string (`"01"`, `"02"`, `"03"`), derived as `printf("%02d", track)` — use this ONLY for filesystem paths (`.multi-agent/track-01`), git branch names (`dev-track-01`), the sprint `id` suffix, and the `/devteam:implement --sprint all 01` CLI argument.
+- Never use a bare, un-padded track number in a path or branch name, and never use a zero-padded string in a state key or JSON `track` field. Every track-bearing sprint record MUST carry both fields — `.devteam/schemas/sprint.schema.json` rejects one without the other.
+- `dependencies` is always the object form `{"sprints": [...]}`, not a bare array — the array form previously used here is a schema violation as of Phase 1.
+- `estimated_complexity` (sum of each task's `complexity.score`) is required alongside `duration_hours` (sum of each task's `estimated_hours`) — both are populated from the task files read in step 1, the same keep-both-metrics approach `.devteam/schemas/task.schema.json` applies per-task.
 
 ### 6.5. Create Git Worktrees (If Enabled)
 
@@ -179,7 +190,14 @@ set_kv_state "parallel_tracks.max_possible_tracks" "3"
 set_kv_state "parallel_tracks.mode" "worktrees"  # or "state-only"
 
 # Set track info (if using worktrees)
+# Key is the bare track integer (1, 2, 3...), never zero-padded -- see the
+# track/track_key convention above. worktree_path and branch are written out
+# in full here specifically so consumers read them directly instead of
+# re-deriving a path from the bare track number (re-deriving via string
+# interpolation, e.g. ".multi-agent/track-${track}", produces the wrong,
+# non-zero-padded path -- .multi-agent/track-1 instead of track-01).
 set_kv_state "parallel_tracks.track_info.1.name" "Backend Track"
+set_kv_state "parallel_tracks.track_info.1.track_key" "01"
 set_kv_state "parallel_tracks.track_info.1.estimated_hours" "28"
 set_kv_state "parallel_tracks.track_info.1.worktree_path" ".multi-agent/track-01"
 set_kv_state "parallel_tracks.track_info.1.branch" "dev-track-01"

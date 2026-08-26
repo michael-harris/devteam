@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devteam.internal/schemas/features.schema.json",
+  "title": "DevTeam Feature Enumeration",
+  "description": "Canonical schema for .devteam/features.json, the second output of agents/planning/prd-generator.md's Phase 8 ('The 200+ Feature Approach'). Mirrors the `features` table already defined in scripts/schema-v2.sql (feature_id, name, description, category, steps JSON, passes, priority) -- this file is the pre-database-load JSON form. Every feature MUST start with passes:false (and every step's passes:false); it is only flipped to true by verification during implementation, never at generation time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_name", "features"],
+  "properties": {
+    "project_name": { "type": "string", "minLength": 1 },
+    "plan_id": { "type": "string" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "description", "steps", "passes", "priority"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^FEAT-[0-9]{3,}$"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "auth", "ui", "api", "data", "validation",
+              "error_handling", "edge_cases", "performance",
+              "security", "accessibility"
+            ],
+            "description": "The 10 categories enumerated in prd-generator.md Phase 8."
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["step", "passes"],
+              "properties": {
+                "step": { "type": "string", "minLength": 1 },
+                "passes": {
+                  "const": false,
+                  "description": "MUST be false at generation time. Flipped to true only by verification during implementation, never by the generating agent."
+                }
+              }
+            }
+          },
+          "passes": {
+            "const": false,
+            "description": "MUST be false at generation time -- see prd-generator.md's 'CRITICAL: All features MUST have passes: false initially.'"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          }
+        }
+      }
+    }
+  }
+}
