@@ -12,9 +12,10 @@ SCHEMA_FILE="${SCRIPT_DIR}/schema.sql"
 SCHEMA_V2_FILE="${SCRIPT_DIR}/schema-v2.sql"
 SCHEMA_V3_FILE="${SCRIPT_DIR}/schema-v3.sql"
 SCHEMA_V4_FILE="${SCRIPT_DIR}/schema-v4.sql"
+SCHEMA_V5_FILE="${SCRIPT_DIR}/schema-v5.sql"
 
 # Current schema version - increment when schema changes
-SCHEMA_VERSION="4"
+SCHEMA_VERSION="5"
 
 # Colors for output
 RED='\033[0;31m'
@@ -76,7 +77,10 @@ get_db_schema_version() {
 
     # Get the version
     local version
-    version=$(sqlite3 "$DB_FILE" "SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1;" 2>/dev/null || echo "0")
+    # Order by version DESC (not just applied_at DESC): CURRENT_TIMESTAMP has only
+    # second-level resolution, so two migrations applied in the same second tie on
+    # applied_at and SQLite's tie-break order is unspecified without this.
+    version=$(sqlite3 "$DB_FILE" "SELECT version FROM schema_version ORDER BY version DESC, applied_at DESC LIMIT 1;" 2>/dev/null || echo "0")
     echo "${version:-0}"
 }
 
@@ -127,6 +131,15 @@ init_database() {
                 exit 1
             fi
             log_info "Applied schema v4 (plans.research_session_id ON DELETE SET NULL)"
+        fi
+
+        # Apply schema v5 (agent_runs call-hierarchy columns)
+        if [ -f "$SCHEMA_V5_FILE" ]; then
+            if ! sqlite3 "$DB_FILE" < "$SCHEMA_V5_FILE"; then
+                log_error "Failed to apply schema v5"
+                exit 1
+            fi
+            log_info "Applied schema v5 (agent_runs.invoked_by_agent / invoked_by_run_id)"
         fi
 
         # Validate SCHEMA_VERSION is numeric before SQL interpolation
@@ -214,6 +227,11 @@ run_migrations() {
     # Migration v3 → v4: Fix plans.research_session_id foreign key
     if [ "$from_version" -lt 4 ]; then
         apply_migration 4 "$SCHEMA_V4_FILE" "plans.research_session_id ON DELETE SET NULL"
+    fi
+
+    # Migration v4 → v5: Add agent_runs call-hierarchy columns
+    if [ "$from_version" -lt 5 ]; then
+        apply_migration 5 "$SCHEMA_V5_FILE" "agent_runs.invoked_by_agent / invoked_by_run_id"
     fi
 
     log_info "Migrations complete, now at v$SCHEMA_VERSION"

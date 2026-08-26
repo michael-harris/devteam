@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devteam.internal/schemas/sprint.schema.json",
+  "title": "DevTeam Sprint",
+  "description": "Canonical schema for docs/sprints/SPRINT-XXX.json (single track) and docs/sprints/SPRINT-XXX-YY.json (parallel tracks), produced by agents/planning/sprint-planner.md. Unifies commands/devteam-plan.md's inline schema (dependencies as {sprints:[]}, estimated_complexity, no track support) with sprint-planner.md's schema (dependencies as a bare array, duration_hours, track support) and fixes the track-number-format ambiguity between the zero-padded strings used in filenames/branches/CLI args ('01') and the bare integers used in JSON fields and SQLite state keys (1) — see the `track`/`track_key` fields below.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "goal", "sprint_number", "tasks", "duration_hours", "dependencies"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^SPRINT-[0-9]{3,}(-[0-9]{2})?$",
+      "description": "SPRINT-XXX for single-track mode, or SPRINT-XXX-YY for track YY of a parallel plan (YY always 2-digit zero-padded, matching `track_key`). E.g. SPRINT-001 or SPRINT-001-01."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sprint_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The XXX portion of `id`, as an integer (e.g. 1 for SPRINT-001)."
+    },
+    "track": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based track number. OMITTED for single-track plans. When present, this is the canonical integer form used in JSON fields and in SQLite state keys (e.g. parallel_tracks.track_info.<track>.*, matching the existing bare-integer convention in agents/planning/sprint-planner.md's set_kv_state examples). Never zero-padded here — use `track_key` for any string/filesystem/branch context."
+    },
+    "track_key": {
+      "type": "string",
+      "pattern": "^[0-9]{2}$",
+      "description": "REQUIRED whenever `track` is present (and only then): the zero-padded 2-digit string form of `track`, derived as printf('%02d', track). This is the ONLY form used for filesystem paths (.multi-agent/track-01), git branch names (dev-track-01), the `id` suffix (SPRINT-001-01), and the /devteam:implement CLI track argument (--sprint all 01). Introduced to close the ambiguity flagged in Architecture Audit §7/Phase 1: state keys previously used bare '1' while worktree directories and branch names used zero-padded '01' with no documented crosswalk between the two, which is a latent bug in commands/devteam-implement.md's inline `track-${trackId}` path interpolation (trackId there comes from the bare state key) — this field is Phase 1's fix at the schema level; commands/devteam-implement.md itself is out of scope until Architecture Audit Phase 3 rewires it onto sprint-orchestrator."
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^TASK-[0-9]{3,}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "duration_hours": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Sum of estimated_hours (task.schema.json) across every task in `tasks`. Matches agents/planning/sprint-planner.md's existing field name and its '40-80 hours per sprint per track' balancing guidance."
+    },
+    "estimated_complexity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sum of complexity.score (task.schema.json) across every task in `tasks`. Added per Architecture Audit Phase 1 to carry commands/devteam-plan.md's estimated_complexity field forward alongside duration_hours, the same keep-both-metrics approach Phase 1 applies to task.schema.json's complexity.score + estimated_hours. Optional because sprint-planner.md's task input does not guarantee every task carries a complexity.score."
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sprints"],
+      "properties": {
+        "sprints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^SPRINT-[0-9]{3,}(-[0-9]{2})?$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "description": "Object form (adopted from commands/devteam-plan.md) chosen as canonical over sprint-planner.md's bare-array form, so a dependency kind other than 'sprints' can be added later without a breaking schema change. sprint-planner.md's own example must be updated to `{\"sprints\": [...]}` to match — see the file's Canonical Schema pointer."
+    },
+    "quality_gates": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Optional. Per-sprint gate descriptions (e.g. 'All tests pass'), carried forward from commands/devteam-plan.md's inline schema for when Architecture Audit Phase 5/6 wires quality-gate-enforcer output back into the sprint record."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["track"] },
+      "then": { "required": ["track_key"] }
+    },
+    {
+      "if": { "required": ["track_key"] },
+      "then": { "required": ["track"] }
+    }
+  ]
+}

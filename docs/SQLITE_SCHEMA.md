@@ -1,6 +1,6 @@
 # SQLite Database Schema
 
-DevTeam uses SQLite for state management, event logging, cost tracking, and metrics. This document describes the complete database schema across all migration versions (v1 through v4).
+DevTeam uses SQLite for state management, event logging, cost tracking, and metrics. This document describes the complete database schema across all migration versions (v1 through v5).
 
 ## Database Location
 
@@ -175,7 +175,9 @@ CREATE TABLE agent_runs (
     tokens_output INTEGER,
     cost_cents INTEGER,
     files_changed JSON,                    -- ["src/foo.ts", "src/bar.ts"]
-    output_summary TEXT
+    output_summary TEXT,
+    invoked_by_agent TEXT,                  -- added in v5: dispatching agent's id, e.g. 'orchestration:task-loop'; NULL if dispatched directly by a command/skill
+    invoked_by_run_id INTEGER REFERENCES agent_runs(id) ON DELETE SET NULL  -- added in v5: FK to the parent run, for call-chain reconstruction
 );
 ```
 
@@ -783,6 +785,27 @@ FROM agent_runs
 GROUP BY agent;
 ```
 
+### v_agent_call_chain
+
+Added in v5. One row per agent run, joined to its immediate parent (if any) via `invoked_by_run_id`, for reconstructing "who dispatched this task" chains (e.g. `sprint-orchestrator -> task-loop -> frontend:developer`) without a recursive CTE for the common single-level case.
+
+```sql
+CREATE VIEW v_agent_call_chain AS
+SELECT
+    child.id AS run_id,
+    child.session_id,
+    child.task_id,
+    child.agent,
+    child.model,
+    child.status,
+    child.invoked_by_agent,
+    child.invoked_by_run_id,
+    parent.agent AS parent_agent,
+    parent.model AS parent_model
+FROM agent_runs child
+LEFT JOIN agent_runs parent ON parent.id = child.invoked_by_run_id;
+```
+
 ### v_current_task
 
 Current in-progress task.
@@ -1102,5 +1125,6 @@ sqlite3 .devteam/devteam.db "VACUUM"
 | 2.0.0 | `schema-v2.sql` | +13 | +6 | Added acceptance_criteria, features, context_snapshots, context_budgets, progress_summaries, session_phases, baselines, checkpoints, checkpoint_restores, rollbacks, token_usage, error_log, dead_letter. Added views for criteria status, feature status, context status, session cost, daily cost, error summary. |
 | 3.0.0 | `schema-v3.sql` | 0 (recreated) | 0 (recreated) | Recreated tasks, task_attempts, and task_files tables with hook integration support. Recreated v_current_task, v_sprint_progress, and v_task_attempts_summary views. |
 | 4.0.0 | `schema-v4.sql` | 0 (recreated) | 0 | Recreated plans table to add proper `ON DELETE SET NULL` FK constraint on `research_session_id`. Migration is wrapped in a transaction. |
+| 5.0.0 | `schema-v5.sql` | 0 | +1 | Added `invoked_by_agent` and `invoked_by_run_id` columns to `agent_runs` for call-hierarchy tracking (Architecture Audit Phase 1, prerequisite for the Phase 6 `execution-ledger` agent). Added `v_agent_call_chain` view. |
 
-Schema versions are managed by `scripts/db-init.sh`, which applies each migration file in order.
+Schema versions are managed by `scripts/db-init.sh`, which applies each migration file in order. `hooks/lib/hook-common.sh`'s `_auto_init_database()` is a separate, minimal auto-init path used when a hook fires before `db-init.sh` has run; its migration list must be kept in sync manually.

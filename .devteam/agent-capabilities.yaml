@@ -650,6 +650,40 @@ categories:
           keywords: [product, roadmap, user research, prioritization, strategy, prd]
           task_types: [product_planning]
 
+  # planning: prd_generator, task_graph_analyzer, sprint_planner all live in
+  # agents/planning/ (agent-registry.json category: "planning", model_strategy:
+  # "fixed", sonnet). Previously only sprint_planner appeared in this file, and
+  # under "product" rather than its own directory-matched category -- see
+  # docs/reviews/ARCHITECTURE_AUDIT_2026-08-26.md Phase 1. task_type_agents.product
+  # below still references sprint_planner by id for ad-hoc "product"-type task
+  # routing; that's a separate, still-valid use and is unaffected by this move.
+  planning:
+    description: "Product requirement, task breakdown, and sprint planning documents"
+    agents:
+      - id: prd_generator
+        capabilities:
+          - requirements_gathering
+          - technology_stack_selection
+          - feature_enumeration
+          - acceptance_criteria_definition
+        complexity_range: [4, 10]
+        default_model: sonnet
+        triggers:
+          keywords: [prd, requirements, product requirements document, feature enumeration]
+          task_types: [planning]
+
+      - id: task_graph_analyzer
+        capabilities:
+          - task_decomposition
+          - dependency_analysis
+          - critical_path_analysis
+          - parallel_track_estimation
+        complexity_range: [4, 10]
+        default_model: sonnet
+        triggers:
+          keywords: [task breakdown, dependency graph, critical path]
+          task_types: [planning]
+
       - id: sprint_planner
         capabilities:
           - sprint_planning
@@ -657,7 +691,7 @@ categories:
           - estimation
           - backlog_grooming
           - velocity_tracking
-        complexity_range: [3, 8]
+        complexity_range: [4, 10]
         default_model: sonnet
         triggers:
           keywords: [sprint, planning, backlog, estimation]

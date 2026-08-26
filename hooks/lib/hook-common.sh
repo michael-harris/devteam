@@ -45,7 +45,7 @@ init_hook() {
 _auto_init_database() {
     local schema_dir="${PLUGIN_ROOT}/scripts"
     local schema_file="${schema_dir}/schema.sql"
-    local schema_version=4
+    local schema_version=5
 
     # Need the base schema file at minimum
     if [[ ! -f "$schema_file" ]]; then
@@ -60,9 +60,11 @@ _auto_init_database() {
     # Create schema_version table
     sqlite3 "$DB_FILE" "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" 2>/dev/null || true
 
-    # Apply migrations v2, v3, v4
+    # Apply migrations v2 through v5 (keep in sync with scripts/db-init.sh's
+    # SCHEMA_VERSION -- this is a separate auto-init path used when a hook
+    # fires before db-init.sh has ever run, so it must not drift behind it)
     local migration_file
-    for v in 2 3 4; do
+    for v in 2 3 4 5; do
         migration_file="${schema_dir}/schema-v${v}.sql"
         if [[ -f "$migration_file" ]]; then
             sqlite3 "$DB_FILE" < "$migration_file" 2>/dev/null || true
