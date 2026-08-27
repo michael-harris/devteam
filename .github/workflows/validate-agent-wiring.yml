@@ -1,0 +1,24 @@
+name: Validate Agent Wiring
+
+# Architecture Audit Phase 7 (governance): every agent in agents/orchestration,
+# agents/planning, and agents/ux must be dispatched by at least one live
+# `subagent_type:` reference from a command, skill, or another agent. This is
+# what stops the "orphaned orchestrator" defect (DEVTEAM Proposal.md §2, §9)
+# from silently regressing a fourth time as the agent count keeps growing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-agent-wiring:
+    name: No orphaned orchestration/planning/ux agents
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run validate-agent-wiring.sh
+        run: ./scripts/validate-agent-wiring.sh

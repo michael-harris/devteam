@@ -538,6 +538,42 @@ test_file_structure() {
 }
 
 # ============================================================================
+# AGENT WIRING GOVERNANCE TESTS
+# (Architecture Audit Phase 7 -- scripts/validate-agent-wiring.sh)
+# ============================================================================
+
+test_agent_wiring() {
+    log_test "Testing agent wiring governance check..."
+
+    assert_file_exists "$PROJECT_ROOT/scripts/validate-agent-wiring.sh" \
+        "validate-agent-wiring.sh should exist"
+
+    assert_command_succeeds "bash '$PROJECT_ROOT/scripts/validate-agent-wiring.sh'" \
+        "validate-agent-wiring.sh should pass against the current repo (no orphaned orchestration/planning/ux agents)"
+
+    # Simulate a newly-orphaned agent by renaming its one live subagent_type
+    # reference, and confirm the check actually catches it (not just always
+    # exits 0) -- this is the Phase 8 acceptance check for Phase 7, run here
+    # as an automated regression test instead of a one-off manual check.
+    local target_file="$PROJECT_ROOT/agents/orchestration/task-loop.md"
+    local backup
+    backup=$(mktemp)
+    cp "$target_file" "$backup"
+
+    sed -i.tmp 's/subagent_type: "orchestration:workflow-compliance"/subagent_type: "orchestration:workflow-compliance-RENAMED"/' "$target_file"
+    rm -f "${target_file}.tmp"
+
+    assert_command_fails "bash '$PROJECT_ROOT/scripts/validate-agent-wiring.sh'" \
+        "validate-agent-wiring.sh should fail when an agent's only reference is renamed away (simulated orphan)"
+
+    cp "$backup" "$target_file"
+    rm -f "$backup"
+
+    assert_command_succeeds "bash '$PROJECT_ROOT/scripts/validate-agent-wiring.sh'" \
+        "validate-agent-wiring.sh should pass again once the simulated orphan is reverted"
+}
+
+# ============================================================================
 # CONFIGURATION TESTS
 # ============================================================================
 
@@ -635,6 +671,9 @@ run_all_tests() {
     echo ""
 
     test_file_structure
+    echo ""
+
+    test_agent_wiring
     echo ""
 
     test_configuration
