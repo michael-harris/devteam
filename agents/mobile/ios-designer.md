@@ -422,6 +422,8 @@ Image(systemName: "star")
 
 ## Output Format
 
+Write each screen's spec to `docs/design/mobile/TASK-XXX-<screen>.yaml` (e.g. `docs/design/mobile/TASK-014-ProfileScreen.yaml`), matching the design task's `TASK-XXX` id -- `mobile:ios-developer` reads this file as its mandatory input before implementing the screen (see its "Reading the Design Spec" section).
+
 ```yaml
 design_spec:
   screen: "ProfileScreen"

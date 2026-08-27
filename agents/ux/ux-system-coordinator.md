@@ -321,8 +321,8 @@ ux:
     secondary: [mobile]
 
   design_system:
-    tokens_path: "design/tokens/"
-    components_path: "design/components/"
+    tokens_path: "design-system/tokens/"
+    components_path: "design-system/components/"
 
   validation:
     check_consistency: true

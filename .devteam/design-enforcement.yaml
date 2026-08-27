@@ -1,0 +1,63 @@
+# Design System Enforcement Configuration
+#
+# Referenced by:
+#   - agents/orchestration/quality-gate-enforcer.md (Design Compliance Gate step)
+#   - agents/ux/design-compliance-validator.md
+#   - .devteam/design-enforcement.md (full documentation of these settings)
+#
+# This is the concrete config file that .devteam/design-enforcement.md's
+# "Configuration" section documents but that never actually existed in the
+# repo (Architecture Audit §5 / Phase 4) -- design-compliance-validator was
+# never wired to run, so nothing consumed it. It is now consumed by
+# quality-gate-enforcer.md's Design Compliance Gate step.
+#
+# Detection locations here MUST match .devteam/ux-config.yaml's
+# design_system.tokens_path/components_path and task-loop-config.yaml's
+# design_compliance.detection block. All three drifting apart is exactly
+# the failure mode this audit found and fixed once already -- keep them
+# in sync if you ever change one.
+
+design_enforcement:
+  enabled: true
+
+  detection:
+    auto_detect: true
+    locations:
+      - "design-system/"
+      - ".design-system/"
+      - "src/design-system/"
+      - "styles/design-system/"
+    required_files:
+      minimal:
+        - "MASTER.md"
+      standard:
+        - "MASTER.md"
+        - "tokens/colors.json"
+        - "tokens/typography.json"
+      complete:
+        - "MASTER.md"
+        - "tokens/colors.json"
+        - "tokens/typography.json"
+        - "tokens/spacing.json"
+        - "components/*.md"
+
+  injection:
+    prepend_to_prompts: true
+    include_full_tokens: true
+
+  validation:
+    on_every_commit: true
+    severity_levels:
+      hardcoded_colors: error
+      hardcoded_fonts: error
+      arbitrary_spacing: warning
+      component_mismatch: error
+
+  quality_gate:
+    block_on_violations: true
+    max_warnings: 5
+
+  drift_detection:
+    enabled: true
+    schedule: weekly
+    alert_threshold: 3 # patterns used 3+ times
