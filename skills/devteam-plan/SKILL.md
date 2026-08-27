@@ -37,6 +37,8 @@ Conduct interactive requirements gathering, research the codebase, create a PRD,
 | `--from <path>` | Load from spec file or folder |
 | `--skip-research` | Skip codebase research phase |
 | `--skip-interview` | Skip interview (use with --from) |
+| `--tracks <N>` | Request N parallel development tracks (default: 1) |
+| `--worktrees` | Use git worktrees for physical track isolation (only with `--tracks > 1`) |
 
 ## File-Based Specification Support
 
@@ -208,7 +210,7 @@ If `add more`: Continue with remaining interview questions
 
 ## Your Process
 
-This command combines PRD generation and sprint planning into a single workflow.
+This command orchestrates PRD generation, task breakdown, and sprint planning by delegating each to its specialist agent (`planning:prd-generator`, `planning:task-graph-analyzer`, `planning:sprint-planner`) via `Task()` calls — it does not reimplement their logic inline. The main session's job is: run the git check, gather requirements and research context, then hand that context to the three planning agents in sequence, each consuming the previous one's output file from disk.
 
 ### Phase 0: Git Repository Check (REQUIRED)
 
@@ -469,185 +471,108 @@ Q3: OAuth integration is more complex than a simple feature.
 
 ### Phase 4: Generate PRD
 
-Create `docs/planning/PROJECT_PRD.json`:
+Delegate PRD generation to the PRD Generator agent — it owns the canonical schema (`.devteam/schemas/prd.schema.json`, `.devteam/schemas/features.schema.json`) and the 200+-feature enumeration methodology. Do not write the PRD inline; pass everything gathered in Phases 1-3 so the agent doesn't re-ask what's already known.
 
-```json
-{
-  "version": "1.0",
-  "project_name": "[Name]",
-  "created": "[Date]",
-  "technology_stack": {
-    "primary_language": "python | typescript",
-    "backend_framework": "fastapi | django | express | nestjs",
-    "frontend_framework": "react | vue | svelte | none",
-    "database": "postgresql | mongodb | sqlite",
-    "orm": "sqlalchemy | prisma | typeorm | drizzle",
-    "package_manager": "uv | npm | pnpm"
-  },
-  "problem_statement": "[Clear description of the problem]",
-  "solution_overview": "[How this project solves it]",
-  "users": {
-    "primary": [
-      {
-        "type": "[User type]",
-        "needs": ["need1", "need2"]
-      }
-    ],
-    "secondary": [
-      {
-        "type": "[User type]",
-        "needs": ["need1"]
-      }
-    ]
-  },
-  "features": {
-    "must_have": [
-      {
-        "id": "F001",
-        "name": "[Feature name]",
-        "description": "[Description]",
-        "acceptance_criteria": [
-          "[Criterion 1]",
-          "[Criterion 2]"
-        ]
-      }
-    ],
-    "nice_to_have": [
-      {
-        "id": "F010",
-        "name": "[Feature name]",
-        "description": "[Description]"
-      }
-    ]
-  },
-  "non_functional_requirements": {
-    "performance": ["[Requirement]"],
-    "security": ["[Requirement]"],
-    "scalability": ["[Requirement]"]
-  },
-  "constraints": {
-    "timeline": "[if specified]",
-    "budget": "[if specified]",
-    "compliance": "[if specified]"
-  },
-  "success_metrics": [
-    "[Metric 1]",
-    "[Metric 2]"
-  ]
-}
+```javascript
+const prdResult = await Task({
+    subagent_type: "planning:prd-generator",
+    model: "sonnet",
+    prompt: `Generate the Project PRD for: ${projectDescription}
+
+        The following has already been gathered in this session -- do NOT
+        re-ask these questions, use them directly. Only ask a follow-up
+        question if something critical is still missing or ambiguous.
+
+        TECHNOLOGY STACK (confirmed): ${confirmedStack}
+
+        INTERVIEW ANSWERS:
+        - Problem: ${problemAnswer}
+        - Primary users: ${usersAnswer}
+        - Must-have features: ${mustHaveAnswer}
+        - Nice-to-have features: ${niceToHaveAnswer}
+        - Scale: ${scaleAnswer}
+        - Constraints: ${constraintsAnswer}
+        - Success metrics: ${successMetricsAnswer}
+
+        RESEARCH FINDINGS (from research-agent; omit if --skip-research):
+        ${researchFindings}
+
+        FOLLOW-UP ANSWERS (research-informed, if any were asked):
+        ${followUpAnswers}
+
+        Produce, matching your canonical schemas exactly:
+        1. docs/planning/PROJECT_PRD.json
+        2. .devteam/features.json (Phase 8 feature enumeration)
+
+        Fold the research findings' recommended_approach, blockers, and
+        patterns_identified into the PRD's technical/requirements sections
+        rather than discarding them.`
+})
 ```
+
+**If `prdResult` surfaces a missing-information question**, ask the user that specific question, then re-invoke the agent with the answer appended. Never fabricate an answer on the agent's behalf.
 
 ### Phase 5: Task Breakdown
 
-Generate tasks in `docs/planning/tasks/`:
+Delegate task decomposition to the Task Graph Analyzer agent — it owns the critical-path algorithm, the two-metric (`complexity.score` + `estimated_hours`) sizing, and the design-task emission rule (see `agents/planning/task-graph-analyzer.md`).
 
-**For each must-have feature:**
-1. Analyze complexity
-2. Break into implementation tasks
-3. Identify dependencies
-4. Assign complexity scores (1-14)
+```javascript
+const taskResult = await Task({
+    subagent_type: "planning:task-graph-analyzer",
+    model: "sonnet",
+    prompt: `Read docs/planning/PROJECT_PRD.json (just generated) and break
+        it into tasks.
 
-**Task file format (`TASK-XXX.json`):**
-```json
-{
-  "id": "TASK-001",
-  "title": "[Task title]",
-  "description": "[Detailed description]",
-  "feature_ref": "F001",
-  "task_type": "backend | frontend | database | fullstack | testing | infrastructure",
-  "complexity": {
-    "score": 6,
-    "factors": {
-      "files_affected": 4,
-      "estimated_lines": 150,
-      "new_dependencies": 1,
-      "risk_flags": []
-    }
-  },
-  "dependencies": ["TASK-000"],
-  "acceptance_criteria": [
-    "[Criterion 1]",
-    "[Criterion 2]"
-  ],
-  "suggested_agent": "backend:api-developer-{language} | frontend:developer | ..."
-}
+        Produce, matching .devteam/schemas/task.schema.json exactly:
+        1. docs/planning/tasks/TASK-XXX.json -- one file per task
+        2. docs/planning/TASK_SUMMARY.md -- task list, dependency chains,
+           max parallel tracks, critical path
+        3. docs/planning/task-dependency-graph.md -- visual dependency graph
+
+        Apply your design-task emission rule: every task_type "frontend" or
+        "fullstack" task must depend on a "design" task covering the same
+        feature_ref.`
+})
 ```
 
 ### Phase 6: Sprint Planning
 
-Organize tasks into sprints in `docs/sprints/`:
+Delegate sprint organization to the Sprint Planner agent — it owns the balanced track-assignment algorithm, worktree provisioning, and SQLite state initialization for sprints/tracks/statistics (see `agents/planning/sprint-planner.md`).
 
-**Sprint organization rules:**
-1. Respect dependencies (dependent tasks in later sprints)
-2. Balance complexity across sprints
-3. Group related tasks
-4. First sprint = foundation/setup
+```javascript
+const sprintResult = await Task({
+    subagent_type: "planning:sprint-planner",
+    model: "sonnet",
+    prompt: `Read all task files from docs/planning/tasks/ and organize
+        them into sprints.
 
-**Sprint file format (`SPRINT-001.json`):**
-```json
-{
-  "id": "SPRINT-001",
-  "name": "[Sprint name]",
-  "goal": "[Sprint goal]",
-  "tasks": [
-    "TASK-001",
-    "TASK-002",
-    "TASK-003"
-  ],
-  "estimated_complexity": 15,
-  "dependencies": {
-    "sprints": []
-  },
-  "quality_gates": [
-    "All tests pass",
-    "No type errors",
-    "Code review complete"
-  ]
-}
+        Requested parallel tracks: ${tracksOption || 1}
+        Use git worktrees: ${worktreesOption || false}
+
+        Produce, matching .devteam/schemas/sprint.schema.json exactly:
+        1. docs/sprints/SPRINT-XXX.json (or SPRINT-XXX-YY.json per track)
+        2. docs/sprints/SPRINT_OVERVIEW.md
+        3. SQLite state initialized per your own Step 7 (sprints, tracks,
+           statistics)`
+})
 ```
 
-### Phase 7: Initialize State
+### Phase 7: Finalize Project Metadata
 
-Initialize project state in SQLite database via the scripts layer:
+Sprint planning above already initializes sprint/track/statistics state. Set the remaining project-level metadata that no planning agent owns:
 
 ```bash
-# Source the state management functions
 source "${CLAUDE_PLUGIN_ROOT}/scripts/state.sh"
 
-# Initialize the database (creates .devteam/devteam.db if needed)
-source "${CLAUDE_PLUGIN_ROOT}/scripts/db-init.sh"
-
-# Set project metadata
-set_kv_state "metadata.project_name" "[name]"
-set_kv_state "metadata.project_type" "project"
+set_kv_state "metadata.project_name" "<project.name from docs/planning/PROJECT_PRD.json>"
+set_kv_state "metadata.project_type" "project"   # "feature" when run with --feature
 set_kv_state "metadata.created_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# Initialize sprints
-set_kv_state "sprints.SPRINT-001.status" "pending"
-set_kv_state "sprints.SPRINT-001.tasks_total" "3"
-set_kv_state "sprints.SPRINT-002.status" "pending"
-set_kv_state "sprints.SPRINT-002.tasks_total" "4"
-# ... repeat for each sprint
-
-# Initialize tasks
-set_kv_state "tasks.TASK-001.status" "pending"
-set_kv_state "tasks.TASK-001.complexity.score" "6"
-set_kv_state "tasks.TASK-001.complexity.tier" "moderate"
-# ... repeat for each task
-
-# Set execution phase
 set_phase "planning_complete"
-```
-
-Or via direct SQLite:
-
-```bash
-sqlite3 "${DEVTEAM_DB:-".devteam/devteam.db"}" "INSERT INTO session_state (session_id, key, value) VALUES ('<session_id>', 'metadata.project_name', '[name]');"
 ```
 
 ## Output Summary
 
-After completion, display:
+After completion, display (populate every bracketed value below by reading the actual PROJECT_PRD.json / TASK-*.json / SPRINT-*.json files the agents above just generated -- never fabricate counts):
 
 ```
 PROJECT PLAN COMPLETE
@@ -660,15 +585,20 @@ Technology Stack:
   - Database: [Database + ORM]
 
 Planning Summary:
-  - Features: [X] must-have, [Y] nice-to-have
+  - Requirements: [X] must-have, [Y] should-have
+  - Features enumerated: [Z] (.devteam/features.json)
   - Tasks: [N] total tasks
   - Sprints: [M] sprints planned
-  - Estimated complexity: [score]
+  - Estimated complexity: [sum of estimated_complexity across sprints]
 
 Files created:
   - docs/planning/PROJECT_PRD.json
+  - .devteam/features.json
   - docs/planning/tasks/TASK-*.json ([N] files)
+  - docs/planning/TASK_SUMMARY.md
+  - docs/planning/task-dependency-graph.md
   - docs/sprints/SPRINT-*.json ([M] files)
+  - docs/sprints/SPRINT_OVERVIEW.md
   - .devteam/devteam.db (state initialized)
 
 Research Findings:
@@ -684,24 +614,7 @@ Next steps:
 
 ## Parallel Track Planning
 
-When a project has independent feature areas that can be developed in parallel, the planner automatically organizes work into **parallel tracks**.
-
-### Automatic Worktree Configuration
-
-When multiple tracks are planned, worktrees are configured automatically in the SQLite state database:
-
-```bash
-# Parallel track configuration stored in SQLite (.devteam/devteam.db)
-source "${CLAUDE_PLUGIN_ROOT}/scripts/state.sh"
-
-set_kv_state "parallel_tracks.mode" "worktrees"
-set_kv_state "parallel_tracks.track_info.01.name" "Backend API"
-set_kv_state "parallel_tracks.track_info.01.sprints" "SPRINT-001,SPRINT-002"
-set_kv_state "parallel_tracks.track_info.01.status" "pending"
-set_kv_state "parallel_tracks.track_info.02.name" "Frontend"
-set_kv_state "parallel_tracks.track_info.02.sprints" "SPRINT-003,SPRINT-004"
-set_kv_state "parallel_tracks.track_info.02.status" "pending"
-```
+When `--tracks <N>` (N > 1) is passed, Phase 6 above hands the track count and `--worktrees` flag straight to `planning:sprint-planner`, which owns the balanced track-assignment algorithm, worktree creation, and the SQLite track-state initialization (`parallel_tracks.*`, `track_info.*`) end to end — see `agents/planning/sprint-planner.md` steps 3, 4, 6.5, and 7. This command does not duplicate that logic inline.
 
 **Note:** Users never need to interact with worktrees directly. The system handles:
 - Creation of worktrees when execution begins
