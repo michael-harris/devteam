@@ -1,6 +1,6 @@
 # DevTeam: Multi-Agent Autonomous Development System
 
-A Claude Code plugin providing **127 specialized AI agents** with:
+A Claude Code plugin providing **125 specialized AI agents** with:
 - **Interview-driven planning** - Clarify requirements before work begins
 - **Codebase research** - Investigate patterns and blockers before implementation
 - **SQLite state management** - Reliable session tracking and cost analytics
@@ -127,7 +127,7 @@ Abandonment Attempt → Detected → Re-engagement Prompt
 
 ---
 
-## 127 Specialized Agents
+## 125 Specialized Agents
 
 ### Enterprise Roles
 
@@ -146,14 +146,12 @@ Abandonment Attempt → Detected → Re-engagement Prompt
 
 | Agent | Purpose |
 |-------|---------|
-| **Autonomous Controller** | Execution loop management, state transitions, circuit breaker |
 | **Bug Council Orchestrator** | Multi-perspective bug analysis |
 | **Code Review Coordinator** | Cross-agent code review orchestration |
 | **Quality Gate Enforcer** | Run and aggregate quality gate results |
 | **Requirements Validator** | Validate acceptance criteria met |
 | **Scope Validator** | Enforce scope boundaries |
-| **Sprint Loop** | Sprint-level quality validation after all tasks |
-| **Sprint Orchestrator** | Sprint execution management, task sequencing |
+| **Sprint Orchestrator** | Sprint execution management, task sequencing, and sprint-level validation (integration/security/performance/requirements/docs/code review/workflow compliance) after all tasks complete; runs in `mode: normal` (single invocation) or `mode: autonomous` (loops across sprints via the Stop hook until the plan is done) |
 | **Task Loop** | Iterative quality loop for single task execution |
 | **Track Merger** | Merge parallel worktree tracks |
 | **Workflow Compliance** | Meta-validator auditing orchestration process |
@@ -441,7 +439,7 @@ User Request
 ├── model-selection.md       # Dynamic model assignment
 ├── parallel-execution.md    # Concurrent task handling
 ├── plan-management.md       # Plan lifecycle tracking
-├── sprint-loop-config.yaml  # Sprint validation settings
+├── sprint-loop-config.yaml  # Sprint-level validation settings (read by sprint-orchestrator.md, folded in from the deprecated sprint-loop agent)
 ├── task-loop-config.yaml    # Task execution settings
 ├── code-review-config.yaml  # Code review standards
 ├── database-config.yaml     # Database setup
@@ -456,14 +454,12 @@ User Request
 └── plans/                   # Multi-plan storage (runtime)
 
 agents/
-├── orchestration/           # 11 orchestration agents
-│   ├── autonomous-controller.md
+├── orchestration/           # 9 orchestration agents (autonomous-controller.md and sprint-loop.md were deprecated to docs/deprecated/ -- folded into sprint-orchestrator.md)
 │   ├── bug-council-orchestrator.md
 │   ├── code-review-coordinator.md
 │   ├── quality-gate-enforcer.md
 │   ├── requirements-validator.md
 │   ├── scope-validator.md
-│   ├── sprint-loop.md
 │   ├── sprint-orchestrator.md
 │   ├── task-loop.md
 │   ├── track-merger.md
@@ -526,7 +522,7 @@ skills/                      # 20 skill definitions (SKILL.md per directory)
 └── rules/                   # 11 path-specific rule files
     └── *.md
 
-agent-registry.json          # Agent and command registry (127 agents, 20 commands)
+agent-registry.json          # Agent and command registry (125 agents, 20 commands)
 settings.json                # Plugin default settings
 .mcp.json                    # Bundled MCP server configs (GitHub, Memory)
 .lsp.json                    # Language server configs (8 languages)

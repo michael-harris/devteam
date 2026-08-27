@@ -942,6 +942,6 @@ If runtime verification fails with blockers, the sprint cannot be marked complet
 - `quality/e2e-tester.md` - Playwright E2E and Puppeteer MCP testing
 - `quality/visual-verification-agent.md` - Claude Computer Use visual verification
 - `orchestration/quality-gate-enforcer.md` - Quality gate integration (delegates hybrid testing here)
-- `orchestration/sprint-loop.md` - Sprint-level validation
+- `orchestration/sprint-orchestrator.md` - Sprint-level validation (Step 4)
 - `orchestration/task-loop.md` - Task-level execution loop (upstream caller)
 - `.devteam/hybrid-testing-config.yaml` - Hybrid testing configuration

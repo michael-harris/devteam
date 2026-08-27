@@ -1,10 +1,12 @@
+> **DEPRECATED (Architecture Audit Phase 3, 2026-08-27):** This agent was never reachable in the live call graph -- it was only ever invoked by `orchestration:sprint-orchestrator`, and that call was itself dead code (see `docs/reviews/ARCHITECTURE_AUDIT_2026-08-26.md` §4). Its sprint-level validation logic (integration, security, hybrid testing, performance, requirements, documentation, code review, workflow compliance) has been folded directly into `agents/orchestration/sprint-orchestrator.md`'s Step 4, which is now the authoritative version. This file is kept for design history only -- it is no longer registered in `agent-registry.json`, has no `Task()` caller anywhere in the repo, and must not be reintroduced as a separate hop without updating the call graph audit.
+
 ---
 name: sprint-loop
-description: "Sprint-level quality validation after all tasks complete"
+description: "DEPRECATED -- folded into orchestration:sprint-orchestrator. Kept for design-history reference only."
 model: opus
 tools: Read, Glob, Grep, Bash, Task
 ---
-# Sprint Loop Agent
+# Sprint Loop Agent (deprecated)
 
 **Agent ID:** `orchestration:sprint-loop`
 **Category:** Orchestration

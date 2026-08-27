@@ -322,7 +322,7 @@ code_review_result:
 ## Integration Points
 
 ### Called By
-- `orchestration:sprint-loop` - For sprint-level code review
+- `orchestration:sprint-orchestrator` - For sprint-level code review (Step 4)
 - `orchestration:task-loop` - For task-level review (optional)
 - Direct user request via `/devteam:review`
 

@@ -1,6 +1,6 @@
 {
   "name": "devteam",
-  "description": "127-agent automated development system with Agent Teams, quality gates, Bug Council diagnostics, and autonomous execution",
+  "description": "125-agent automated development system with Agent Teams, quality gates, Bug Council diagnostics, and autonomous execution",
   "version": "4.0.0",
   "author": {
     "name": "Multi-Agent Development Team"

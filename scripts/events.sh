@@ -201,19 +201,38 @@ log_phase_changed() {
 # ============================================================================
 
 # Log agent started event
-# Args: agent, model, [task_id]
+# Args: agent, model, [task_id], [invoked_by_agent], [invoked_by_run_id]
+#
+# invoked_by_agent/invoked_by_run_id record the call hierarchy (schema v5,
+# agent_runs.invoked_by_agent / invoked_by_run_id) -- the dispatching
+# orchestrator's own agent id and its own agent_runs.id, so chains like
+# sprint-orchestrator -> task-loop -> frontend:developer can be reconstructed
+# via v_agent_call_chain instead of guessed from timestamps. Leave both empty
+# when the caller is a command/skill (no parent agent run to attribute to).
+#
+# On success, echoes the new agent_runs.id to stdout so the caller can pass
+# it as invoked_by_run_id to any agent IT dispatches:
+#   run_id=$(log_agent_started "orchestration:task-loop" "opus" "$task_id" \
+#       "orchestration:sprint-orchestrator" "$parent_run_id")
 log_agent_started() {
     local agent="$1"
     local model="$2"
     local task_id="${3:-}"
+    local invoked_by_agent="${4:-}"
+    local invoked_by_run_id="${5:-}"
 
     if [ -z "$agent" ]; then
         log_error "Agent name required" "events"
         return 1
     fi
 
+    if [ -n "$invoked_by_run_id" ] && ! validate_numeric "$invoked_by_run_id" "invoked_by_run_id" 2>/dev/null; then
+        log_warn "Ignoring non-numeric invoked_by_run_id: $invoked_by_run_id" "events"
+        invoked_by_run_id=""
+    fi
+
     local json_data
-    json_data=$(json_object "task_id" "$task_id")
+    json_data=$(json_object "task_id" "$task_id" "invoked_by_agent" "$invoked_by_agent" "invoked_by_run_id" "$invoked_by_run_id")
     log_event "agent_started" "agent" "Agent started: $agent ($model)" \
         "$json_data" "$agent" "$model"
 
@@ -228,16 +247,34 @@ log_agent_started() {
     local iteration
     iteration=$(get_current_iteration) || iteration=0
 
-    local esc_session_id esc_agent esc_model esc_task_id
+    local esc_session_id esc_agent esc_model esc_task_id esc_invoked_by_agent
     esc_session_id=$(sql_escape "$session_id")
     esc_agent=$(sql_escape "$agent")
     esc_model=$(sql_escape "$model")
     esc_task_id=$(sql_escape "$task_id")
+    esc_invoked_by_agent=$(sql_escape "$invoked_by_agent")
 
-    local query="INSERT INTO agent_runs (session_id, agent, model, task_id, iteration, status)
-        VALUES ('$esc_session_id', '$esc_agent', '$esc_model', NULLIF('$esc_task_id', ''), ${iteration:-0}, 'running');"
+    # INSERT + last_insert_rowid() must run in the same sqlite3 invocation
+    # (same connection) for last_insert_rowid() to reflect this row.
+    local query="INSERT INTO agent_runs (session_id, agent, model, task_id, iteration, status, invoked_by_agent, invoked_by_run_id)
+        VALUES ('$esc_session_id', '$esc_agent', '$esc_model', NULLIF('$esc_task_id', ''), ${iteration:-0}, 'running',
+                NULLIF('$esc_invoked_by_agent', ''), NULLIF(${invoked_by_run_id:-NULL}, ''));
+        SELECT last_insert_rowid();"
 
-    sql_exec "$query" > /dev/null || log_warn "Failed to insert agent_runs record" "events"
+    # Matches every other function in this file (log_agent_completed,
+    # log_agent_failed, log_gate_passed, etc.): a logging/state-tracking
+    # failure must never itself abort the caller (hooks in this codebase are
+    # deliberately "fail silently -- never block Claude Code"). On failure,
+    # warn and echo nothing; a caller doing `run_id=$(log_agent_started ...)`
+    # then simply gets an empty run_id and its own dispatches are recorded
+    # parentless instead of attributed -- degraded, not broken.
+    local new_run_id
+    if ! new_run_id=$(sql_exec "$query"); then
+        log_warn "Failed to insert agent_runs record" "events"
+        return 0
+    fi
+
+    echo "$new_run_id"
 }
 
 # Log agent completed event

@@ -13,7 +13,7 @@ memory: project
 
 ## Purpose
 
-Manages entire sprint execution including task sequencing, parallelization, and state tracking. Delegates individual task execution to Task Loop and sprint-level validation to Sprint Loop.
+Manages entire sprint execution including task sequencing, parallelization, and state tracking. Delegates individual task execution to Task Loop; runs sprint-level validation itself (see "SPRINT-LEVEL VALIDATION PHASE" below -- folded in from the former, unreachable `orchestration:sprint-loop` agent).
 
 ## Your Role
 
@@ -21,7 +21,7 @@ You orchestrate sprint execution by:
 1. Managing task sequencing and parallelization
 2. Delegating each task to the Task Loop
 3. Tracking progress and handling failures
-4. Calling Sprint Loop for sprint-level validation
+4. Running sprint-level validation (integration, security, performance, requirements, documentation, code review, workflow compliance) once all tasks complete
 5. Generating sprint summary and PR
 
 You do NOT:
@@ -59,6 +59,40 @@ You do NOT:
 2. A task fails after 10 iterations (mark as failed, continue with non-blocked tasks), OR
 3. ALL remaining tasks are blocked by failed dependencies
 
+## Execution Mode: `normal` vs `autonomous`
+
+You receive a `mode` input (default `"normal"`) from whatever invoked you (`/devteam:implement`, `/devteam:bug`, `/devteam:issue`). This is a distinct axis from the "don't stop to ask permission" autonomy above -- it controls whether the **Stop hook** keeps re-invoking a fresh session to continue past this one, across multiple sprints/tasks, until the whole plan is done.
+
+The mechanism already exists (`hooks/stop-hook.sh`'s `is_autonomous_mode()`, gated on `.devteam/autonomous-mode`, plus the circuit-breaker/max-iterations limits `hooks/session-start.sh` already parses from `.devteam/config.yaml`'s `autonomous:` block per Phase 0) -- it has simply never been turned on by any caller. You are the one that turns it on:
+
+```yaml
+mode_normal:
+  # Default. Execute the requested target (one sprint, or --all sprints,
+  # within this single invocation) and stop when done or blocked.
+  on_start: do nothing to the marker
+  on_exit: do nothing to the marker
+
+mode_autonomous:
+  on_start:
+    - "mkdir -p \"${DEVTEAM_DIR:-.devteam}\""
+    - "touch \"${DEVTEAM_DIR:-.devteam}/autonomous-mode\""
+    - # From this point, the Stop hook will block session exit and
+      # re-inject a continuation prompt (see hooks/stop-hook.sh) until
+      # EXIT_SIGNAL is valid AND all sprints are complete, OR the circuit
+      # breaker trips, OR max_iterations is reached (both already sourced
+      # from .devteam/config.yaml -- you do not need to duplicate those
+      # thresholds here).
+  on_genuine_completion:
+    - "rm -f \"${DEVTEAM_DIR:-.devteam}/autonomous-mode\""
+    - # Defensive: hooks/stop-hook.sh's cleanup_session() already removes
+      # this marker on a valid completion signal or circuit-breaker trip.
+      # Removing it here too means a genuine "all sprints done" completion
+      # is never accidentally left in a state where the next unrelated
+      # /devteam:implement call is silently forced into autonomous looping.
+```
+
+Never set the marker in `mode: normal`, and never leave it set past genuine completion in `mode: autonomous` -- an orphaned marker makes an unrelated future session loop forever against a hook that thinks work is still pending.
+
 **State tracking continues throughout:**
 - Every task status tracked in SQLite (`source scripts/state.sh`)
 - Every iteration tracked by task-loop
@@ -71,6 +105,8 @@ You do NOT:
 - Sprint definition file: `docs/sprints/SPRINT-XXX.json` or `SPRINT-XXX-YY.json`
 - **State**: Managed in SQLite via `source scripts/state.sh` (DB at `.devteam/devteam.db`)
 - PRD reference: `docs/planning/PROJECT_PRD.json`
+- `mode`: `"normal"` (default) or `"autonomous"` -- see Execution Mode above
+- `own_run_id`: the `agent_runs.id` your caller logged for THIS invocation via `log_agent_started "orchestration:sprint-orchestrator" "opus" ...` before dispatching you. Use it as `invoked_by_run_id` (with `invoked_by_agent="orchestration:sprint-orchestrator"`) on every `log_agent_started` call you make below, so the call chain (`sprint-orchestrator -> task-loop -> frontend:developer`, etc.) is reconstructable via `v_agent_call_chain`. If your caller did not pass one (e.g. a manual/debug invocation), pass empty strings and your dispatches are simply recorded as parentless.
 
 ## Responsibilities
 
@@ -80,7 +116,7 @@ You do NOT:
 4. **Execute tasks in dependency order** (parallel where possible, skip completed)
 5. **Call Task Loop** for each task (handles quality gates and iteration)
 6. **Update state in SQLite** after each task completion: `set_kv_state "task.TASK-XXX.status" "completed"`
-7. **Call Sprint Loop** for sprint-level validation (integration, security, performance)
+7. **Run sprint-level validation** yourself (integration, security, performance, and more -- see "SPRINT-LEVEL VALIDATION PHASE" below)
 8. **Generate sprint summary** with complete statistics
 9. **Mark sprint as completed** in SQLite: `set_kv_state "sprint.status" "completed"`
 
@@ -122,7 +158,7 @@ team_setup:
 4. Teammates work **simultaneously** — no file conflicts due to worktree isolation
 5. Use `TaskCompleted` hook to detect when teammates finish
 6. When all parallel tasks complete, **merge worktrees** using Track Merger
-7. Proceed to next dependency group or Sprint Loop validation
+7. Proceed to next dependency group, or to your own sprint-level validation phase once all groups are done
 
 ### Sequential Task Handling
 
@@ -158,10 +194,12 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
                               │
                               ▼ (all tasks complete, merge worktrees)
 ┌─────────────────────────────────────────────────────────────┐
-│                      SPRINT LOOP                             │
+│     SPRINT-LEVEL VALIDATION (Sprint Orchestrator, Step 4)    │
+│     -- folded in from the former Sprint Loop agent --        │
 │  • Integration validation    • Security audit               │
-│  • Performance audit         • Requirements validation      │
-│  • Documentation check       • Workflow compliance          │
+│  • Hybrid testing (frontend) • Performance audit             │
+│  • Requirements validation   • Documentation check           │
+│  • Code review               • Workflow compliance           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -200,7 +238,13 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
          * Execute task normally
 
    3b. Call orchestration:task-loop for task:
-       - Pass task ID, task definition, SQLite DB path (`.devteam/devteam.db`)
+       - Log the dispatch and capture the new run's id, attributing it to yourself:
+         ```bash
+         source scripts/events.sh
+         TL_RUN_ID=$(log_agent_started "orchestration:task-loop" "opus" "TASK-XXX" \
+             "orchestration:sprint-orchestrator" "$own_run_id")
+         ```
+       - Pass task ID, task definition, SQLite DB path (`.devteam/devteam.db`), and `$TL_RUN_ID` (as task-loop's `own_run_id`, so ITS dispatches attribute back to this run)
        - Task Loop handles:
          * Implementation agent calls
          * Quality gate enforcement (via quality-gate-enforcer)
@@ -208,6 +252,7 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
          * Model escalation on failures
          * Bug Council activation if stuck
        - Task Loop returns: COMPLETE, FAILED, or HALTED
+       - Close out the run: `log_agent_completed "orchestration:task-loop" "opus" "[]" 0 0 0` on COMPLETE, or `log_agent_failed "orchestration:task-loop" "opus" "<reason>"` on FAILED/HALTED
 
    3c. After task completion:
        - Query SQLite for updated task state (task-loop updated it)
@@ -221,27 +266,31 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
        - Identify blocked downstream tasks
        - Continue with non-blocked tasks
 
-4. SPRINT-LEVEL VALIDATION PHASE:
+4. SPRINT-LEVEL VALIDATION PHASE (folded in from the former `orchestration:sprint-loop` agent -- see `docs/deprecated/sprint-loop.md` for the design history; this is now the authoritative version):
 
-   Call orchestration:sprint-loop for comprehensive sprint validation:
+   Once all tasks in the sprint reach a terminal state, run this validation directly -- do NOT delegate it to a separate agent. You validate the sprint holistically; Task Loop already validated each task individually.
 
-   Sprint Loop handles:
-   - Integration validation (cross-task testing)
-   - Sprint-level security audit (cross-cutting concerns)
-   - Sprint-level performance audit (end-to-end)
-   - Sprint requirements validation (all goals met)
-   - Documentation verification (all docs updated)
-   - Workflow compliance check (process followed correctly)
+   **Sub-checks, in order, each dispatched via `Task()` with `model` set explicitly as shown, and each logged with `log_agent_started`/`log_agent_completed` using `invoked_by_agent="orchestration:sprint-orchestrator"` and `invoked_by_run_id="$own_run_id"`:**
 
-   Sprint Loop will:
-   - Create fix tasks if issues found
-   - Delegate fix tasks back to Task Loop
-   - Iterate up to 3 times for sprint-level issues
-   - Return: COMPLETE, FAILED, or HALTED
+   | Step | Agent | Model | Checks |
+   |------|-------|-------|--------|
+   | 4.1 Integration | `quality:runtime-verifier` | `sonnet` | Cross-task API contracts match, data flows correctly, no breaking changes, integration tests pass |
+   | 4.2 Security | `quality:security-auditor` (+ `security:security-auditor-{language}` per detected language) | `opus` | Auth flow secure end-to-end, authorization consistent, no data leakage, OWASP Top 10, secrets managed |
+   | 4.3 Hybrid testing (only when sprint touched frontend: `*.tsx`/`*.jsx`/`*.vue`/`*.svelte`/`*.css`) | `quality:e2e-tester` (Playwright, then Puppeteer MCP for file-download/drag-drop/extension edge cases), then `quality:visual-verification` | `sonnet`, `sonnet`, `opus` | E2E pass rate 100%, visual regression baselines match, WCAG 2.1 AA, cross-browser + mobile viewports; visual: 0 critical/major issues |
+   | 4.4 Performance | `quality:performance-auditor-{language}` per detected language | `sonnet` | Response times, N+1 queries, memory growth, caching (thresholds: 200ms API, 2s page load, 10% memory growth) |
+   | 4.5 Requirements | `orchestration:requirements-validator` | `opus` | All sprint goals achieved, cross-task acceptance criteria met, user stories complete, no regressions (scope: sprint, not task) |
+   | 4.6 Documentation | `quality:documentation-coordinator` | `haiku` | README, API docs, architecture docs, CHANGELOG, manual testing guide all updated as needed |
+   | 4.7 Code review | `orchestration:code-review-coordinator` | `opus` | Review all sprint code changes: `Task({ subagent_type: "orchestration:code-review-coordinator", model: "opus", prompt: "Review all code changes in this sprint. Sprint: {sprint_id}, Changed files: {all_changed_files}" })` |
+   | 4.8 Workflow compliance | `orchestration:workflow-compliance` | `opus` | Sprint summary + TESTING_SUMMARY.md + manual testing guide exist, SQLite state updated, all gates actually ran, no shortcuts taken (see `agents/orchestration/workflow-compliance.md`'s "Shortcuts to Catch") |
 
-   On COMPLETE: Proceed to summary generation
-   On FAILED: Report incomplete sprint
-   On HALTED: Escalate to user immediately
+   **On critical security finding (4.2):** HALT the sprint immediately and report to the user -- do not continue to later sub-checks.
+
+   **On any other sub-check failing:** create a targeted fix task (integration/security/performance/documentation issue as appropriate), delegate it back to `orchestration:task-loop` exactly as in Step 3b above (including `invoked_by_*` wiring), then re-run the sub-check that failed.
+
+   **Iteration limit:** up to 3 total passes over this whole validation phase (matching the former Sprint Loop's `total_sprint_iterations: 3`; individual sub-check budgets: integration 2, security 2, hybrid testing 2, performance 2, documentation 1). If still failing after 3 passes, HALT with a detailed report of what remains broken -- do not mark the sprint complete.
+
+   On all sub-checks PASS: proceed to summary generation (Step 5).
+   On HALT (security-critical or iteration limit exhausted): stop here, do not mark sprint complete, escalate to the user with the detailed report.
 
 5. Generate comprehensive sprint completion report:
    - Tasks completed: X/Y (breakdown by type)

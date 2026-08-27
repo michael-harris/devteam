@@ -35,18 +35,18 @@ log_test() {
 
 log_pass() {
     echo -e "${GREEN}[PASS]${NC} $1"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 log_fail() {
     echo -e "${RED}[FAIL]${NC} $1"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
     FAILED_TESTS+=("$1")
 }
 
 log_skip() {
     echo -e "${YELLOW}[SKIP]${NC} $1"
-    ((TESTS_SKIPPED++))
+    TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
 }
 
 # Assert functions
@@ -55,7 +55,7 @@ assert_equals() {
     local actual="$2"
     local message="${3:-Values should be equal}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [ "$expected" = "$actual" ]; then
         log_pass "$message"
@@ -70,7 +70,7 @@ assert_not_empty() {
     local value="$1"
     local message="${2:-Value should not be empty}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [ -n "$value" ]; then
         log_pass "$message"
@@ -85,7 +85,7 @@ assert_empty() {
     local value="$1"
     local message="${2:-Value should be empty}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [ -z "$value" ]; then
         log_pass "$message"
@@ -101,7 +101,7 @@ assert_contains() {
     local needle="$2"
     local message="${3:-String should contain substring}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [[ "$haystack" == *"$needle"* ]]; then
         log_pass "$message"
@@ -117,7 +117,7 @@ assert_matches() {
     local pattern="$2"
     local message="${3:-Value should match pattern}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [[ "$value" =~ $pattern ]]; then
         log_pass "$message"
@@ -132,7 +132,7 @@ assert_file_exists() {
     local file="$1"
     local message="${2:-File should exist}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if [ -f "$file" ]; then
         log_pass "$message"
@@ -147,7 +147,7 @@ assert_command_succeeds() {
     local cmd="$1"
     local message="${2:-Command should succeed}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if eval "$cmd" > /dev/null 2>&1; then
         log_pass "$message"
@@ -162,7 +162,7 @@ assert_command_fails() {
     local cmd="$1"
     local message="${2:-Command should fail}"
 
-    ((TESTS_RUN++))
+    TESTS_RUN=$((TESTS_RUN + 1))
 
     if ! eval "$cmd" > /dev/null 2>&1; then
         log_pass "$message"
@@ -193,6 +193,67 @@ teardown_test_db() {
     rm -rf "$SCRIPT_DIR/.test-devteam"
     unset DEVTEAM_DIR
     unset DB_FILE
+}
+
+# ============================================================================
+# CALL HIERARCHY TESTS (agent_runs.invoked_by_agent / invoked_by_run_id,
+# Architecture Audit Phase 3 -- see scripts/events.sh log_agent_started)
+# ============================================================================
+
+test_call_hierarchy() {
+    log_test "Testing agent_runs call-hierarchy (invoked_by_*) tracking..."
+
+    setup_test_db
+    source "$PROJECT_ROOT/scripts/events.sh"
+
+    local session_id
+    session_id=$(start_session "test command" "implement")
+
+    # Root dispatch: no parent (as a command/skill would log before its first Task() call)
+    local root_run_id
+    root_run_id=$(log_agent_started "orchestration:sprint-orchestrator" "opus" "" "" "")
+    assert_not_empty "$root_run_id" "log_agent_started should return a new run id"
+
+    # Child dispatch: attributes back to the root run
+    local child_run_id
+    child_run_id=$(log_agent_started "orchestration:task-loop" "opus" "" "orchestration:sprint-orchestrator" "$root_run_id")
+    assert_not_empty "$child_run_id" "log_agent_started should return a new run id for the child"
+
+    local recorded_parent_agent recorded_parent_run_id
+    recorded_parent_agent=$(sqlite3 "$DB_FILE" "SELECT invoked_by_agent FROM agent_runs WHERE id=$child_run_id;")
+    recorded_parent_run_id=$(sqlite3 "$DB_FILE" "SELECT invoked_by_run_id FROM agent_runs WHERE id=$child_run_id;")
+    assert_equals "orchestration:sprint-orchestrator" "$recorded_parent_agent" "Child run should record its dispatcher's agent id"
+    assert_equals "$root_run_id" "$recorded_parent_run_id" "Child run should record its dispatcher's run id"
+
+    local root_invoked_by
+    root_invoked_by=$(sqlite3 "$DB_FILE" "SELECT COALESCE(invoked_by_agent, 'NULL') FROM agent_runs WHERE id=$root_run_id;")
+    assert_equals "NULL" "$root_invoked_by" "Root run (no caller attribution) should have NULL invoked_by_agent"
+
+    # v_agent_call_chain view resolves the parent's agent id in one query
+    local chain_parent_agent
+    chain_parent_agent=$(sqlite3 "$DB_FILE" "SELECT parent_agent FROM v_agent_call_chain WHERE run_id=$child_run_id;")
+    assert_equals "orchestration:sprint-orchestrator" "$chain_parent_agent" "v_agent_call_chain should resolve the parent agent"
+
+    # Backward compatibility: the pre-existing 3-arg call style (no invoked_by_*) must still work
+    if log_agent_started "test-agent" "sonnet" "" > /dev/null; then
+        log_pass "3-arg log_agent_started call (no invoked_by_*) still succeeds"
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_fail "3-arg log_agent_started call (no invoked_by_*) should still succeed"
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+
+    # A logging failure (e.g. FK violation from a task_id not yet in `tasks`)
+    # must degrade gracefully -- never abort the caller. This mirrors a
+    # latent, pre-existing case: test_event_logging below passes task_id
+    # "task-1", which does not exist in the `tasks` table.
+    local failed_run_id
+    failed_run_id=$(log_agent_started "test-agent" "sonnet" "nonexistent-task-id")
+    assert_empty "$failed_run_id" "log_agent_started should return empty (not error) when the insert fails"
+
+    teardown_test_db
 }
 
 # ============================================================================
@@ -252,12 +313,12 @@ test_state_management() {
     # Test is_session_running
     if is_session_running; then
         log_pass "is_session_running returns true when session active"
-        ((TESTS_RUN++))
-        ((TESTS_PASSED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_fail "is_session_running should return true"
-        ((TESTS_RUN++))
-        ((TESTS_FAILED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 
     # Test set_phase and get_current_phase
@@ -286,12 +347,12 @@ test_state_management() {
     end_session "completed" "Test finished"
     if ! is_session_running; then
         log_pass "is_session_running returns false after session ended"
-        ((TESTS_RUN++))
-        ((TESTS_PASSED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_fail "Session should not be running after end_session"
-        ((TESTS_RUN++))
-        ((TESTS_FAILED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 
     teardown_test_db
@@ -370,12 +431,12 @@ test_sql_injection_prevention() {
     # This should fail validation, not execute
     if ! set_state "status; DROP TABLE sessions" "value" 2>/dev/null; then
         log_pass "SQL injection via field name blocked"
-        ((TESTS_RUN++))
-        ((TESTS_PASSED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_fail "SQL injection via field name should be blocked"
-        ((TESTS_RUN++))
-        ((TESTS_FAILED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 
     # Verify tables still exist
@@ -412,12 +473,12 @@ test_event_logging() {
 
     if [ "$event_count" -ge 4 ]; then
         log_pass "Events were logged correctly ($event_count events)"
-        ((TESTS_RUN++))
-        ((TESTS_PASSED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_fail "Expected at least 4 events, got $event_count"
-        ((TESTS_RUN++))
-        ((TESTS_FAILED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 
     teardown_test_db
@@ -445,12 +506,12 @@ test_file_structure() {
     cmd_count=$(find "$PROJECT_ROOT/commands" -name "*.md" | wc -l)
     if [ "$cmd_count" -ge 10 ]; then
         log_pass "Commands directory has sufficient files ($cmd_count)"
-        ((TESTS_RUN++))
-        ((TESTS_PASSED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_fail "Expected at least 10 command files, got $cmd_count"
-        ((TESTS_RUN++))
-        ((TESTS_FAILED++))
+        TESTS_RUN=$((TESTS_RUN + 1))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 }
 
@@ -465,12 +526,12 @@ test_configuration() {
     if command -v jq &> /dev/null; then
         if jq empty "$PROJECT_ROOT/agent-registry.json" 2>/dev/null; then
             log_pass "agent-registry.json is valid JSON"
-            ((TESTS_RUN++))
-            ((TESTS_PASSED++))
+            TESTS_RUN=$((TESTS_RUN + 1))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             log_fail "agent-registry.json is not valid JSON"
-            ((TESTS_RUN++))
-            ((TESTS_FAILED++))
+            TESTS_RUN=$((TESTS_RUN + 1))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
 
         # Check required fields in agent-registry.json
@@ -482,12 +543,12 @@ test_configuration() {
         agent_count=$(jq '.agents | length' "$PROJECT_ROOT/agent-registry.json")
         if [ "$agent_count" -ge 80 ]; then
             log_pass "agent-registry.json has sufficient agents ($agent_count)"
-            ((TESTS_RUN++))
-            ((TESTS_PASSED++))
+            TESTS_RUN=$((TESTS_RUN + 1))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             log_fail "Expected at least 80 agents, got $agent_count"
-            ((TESTS_RUN++))
-            ((TESTS_FAILED++))
+            TESTS_RUN=$((TESTS_RUN + 1))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
     else
         log_skip "jq not installed, skipping JSON validation tests"
@@ -531,6 +592,9 @@ run_all_tests() {
     echo "============================================"
     echo "         DevTeam Test Suite                "
     echo "============================================"
+    echo ""
+
+    test_call_hierarchy
     echo ""
 
     test_common_library

@@ -61,8 +61,11 @@ Execute implementation work - plans, sprints, tasks, or ad-hoc work.
 | `--model <model>` | Force starting model: haiku, sonnet, opus |
 | `--max-iterations <n>` | Override max iterations (default: 10) |
 | `--show-worktrees` | Debug: Show worktree operations (normally hidden) |
+| `--autonomous` | Keep looping across sprints/tasks without stopping between them (sets `orchestration:sprint-orchestrator`'s `mode: autonomous`; only applies to `--sprint`/`--all`/plan targets, ignored for `--task`/ad-hoc) |
 
 ## Your Process
+
+This command delegates execution to the real orchestrators via `Task()` calls -- it does not reimplement the task loop, quality gates, worktree management, or cost tracking inline. The main session's job is: initialize the session, determine what to execute, run the ad-hoc interview if needed, then hand off to `orchestration:task-loop` (single task) or `orchestration:sprint-orchestrator` (sprint/all-sprints/plan), which own everything downstream.
 
 ### Phase 0: Initialize Session
 
@@ -197,269 +200,95 @@ eco_mode:
     - complexity_10_plus: sonnet
 ```
 
-### Phase 5: Execute with Task Loop
+### Phase 5: Execute
 
+Route to the real orchestrator based on the target determined in Phase 1. Do not reimplement the task loop, quality gates, or completion reporting here -- `orchestration:task-loop` and `orchestration:sprint-orchestrator` own that (including language-aware quality gates via `quality-gate-enforcer`, not a hardcoded `npm test`/`npm run lint` that would break on non-JS projects).
+
+**Target type `task` or `adhoc`** (a single `--task TASK-XXX`, or an ad-hoc description after Phase 2/3/4 above): delegate directly to Task Loop.
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/events.sh"
+TL_RUN_ID=$(log_agent_started "orchestration:task-loop" "opus" "$taskId" "" "")
 ```
-TASK LOOP
-
-   Execute       <-------- Fix Tasks
-   Agent(s)                    |
-      |                        |
-      v                        |
-   Quality    -- FAIL -->  Create Fix
-    Gates                   Tasks
-      |                        |
-     PASS                  ESCALATE?
-      |                        |
-      v                        v
-   Complete               Upgrade
-   + Report                Model
-
-   Max Iterations: 10 (normal) / 10 (eco, slower escalation)
-```
-
-**Escalation thresholds:**
-
-| Mode | haiku->sonnet | sonnet->opus | opus->council |
-|------|--------------|-------------|--------------|
-| Normal | 2 failures | 2 failures | 3 failures |
-| Eco | 4 failures | 4 failures | 4 failures |
-
-### Phase 6: Quality Gates
-
-Run all applicable quality gates:
-
 ```javascript
-const gates = [
-    { name: 'tests', command: 'npm test', required: true },
-    { name: 'typecheck', command: 'npm run typecheck', required: true },
-    { name: 'lint', command: 'npm run lint', required: true },
-    { name: 'security', command: 'npm audit', required: false },
-    { name: 'coverage', command: 'npm run coverage', threshold: 80 }
-]
+const result = await Task({
+    subagent_type: "orchestration:task-loop",
+    model: "opus",
+    prompt: `Execute ${taskId}: ${taskDescription}
 
-for (const gate of gates) {
-    const result = await runGate(gate)
-    log_gate_passed(gate.name) // or log_gate_failed()
+        Your own agent_runs id for this run (use as invoked_by_run_id on
+        every sub-agent you dispatch, with invoked_by_agent
+        "orchestration:task-loop"): ${TL_RUN_ID}
 
-    if (!result.passed && gate.required) {
-        createFixTask(gate, result.errors)
-    }
-}
+        Acceptance criteria: ${acceptanceCriteria}
+        Suggested agent: ${suggestedAgent}
+        Starting model: ${startingModel} (complexity: ${complexityScore})
+        Execution mode: ${ecoMode ? 'eco' : 'normal'}`
+})
+```
+```bash
+if [ "$result_status" = "COMPLETE" ]; then
+    log_agent_completed "orchestration:task-loop" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents"
+else
+    log_agent_failed "orchestration:task-loop" "opus" "$result_reason"
+fi
 ```
 
-### Phase 7: Completion
+**Target type `sprint`, `all_sprints`, or `plan`**: delegate to Sprint Orchestrator, which sequences tasks (via Task Loop, per task) and runs sprint-level validation itself.
 
-**On success:**
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/events.sh"
+SO_RUN_ID=$(log_agent_started "orchestration:sprint-orchestrator" "opus" "" "" "")
+```
 ```javascript
-log_session_ended('completed', 'All quality gates passed')
-end_session('completed', 'Success')
+const result = await Task({
+    subagent_type: "orchestration:sprint-orchestrator",
+    model: "opus",
+    prompt: `Execute ${targetType === 'all_sprints' ? 'all sprints' : `sprint ${sprintId}`} for the active plan.
 
-// Output completion message
-console.log(`
-IMPLEMENTATION COMPLETE
+        Your own agent_runs id for this run (use as own_run_id below):
+        ${SO_RUN_ID}
 
-Task: ${taskDescription}
-
-Files Changed:
-${filesChanged.map(f => `  - ${f}`).join('\n')}
-
-Quality Gates:
-  Tests: ${testCount} passing
-  Types: No errors
-  Lint: Clean
-  Coverage: ${coverage}%
-
-Iterations: ${iterations}
-Model Usage: ${modelBreakdown}
-Cost: $${totalCost}
-
-EXIT_SIGNAL: true
-`)
+        mode: ${autonomousFlag ? 'autonomous' : 'normal'}
+        execution_mode: ${ecoMode ? 'eco' : 'normal'}`
+})
+```
+```bash
+if [ "$result_status" = "COMPLETE" ]; then
+    log_agent_completed "orchestration:sprint-orchestrator" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents"
+else
+    log_agent_failed "orchestration:sprint-orchestrator" "opus" "$result_reason"
+fi
 ```
 
-**On max iterations:**
-```javascript
-log_session_ended('failed', 'Max iterations reached')
-end_session('failed', 'Max iterations reached')
-
-console.log(`
-MAX ITERATIONS REACHED
-
-The task could not be completed within ${maxIterations} iterations.
-
-Remaining Issues:
-${remainingIssues.map(i => `  - ${i}`).join('\n')}
-
-Recommendation: Review the issues above and either:
-1. Run /devteam:implement again with more context
-2. Break the task into smaller pieces
-3. Manually address the blocking issues
-
-EXIT_SIGNAL: true
-`)
+**On either path returning COMPLETE:**
+```bash
+log_session_ended "completed" "All quality gates and workflow compliance passed"
+end_session "completed" "Success"
 ```
+Report the result using the actual fields the orchestrator returned (files changed, quality gate results, iterations, model usage, cost) -- never fabricate these values. See "User Communication" below for the display format.
+
+**On FAILED or HALTED:**
+```bash
+log_session_ended "failed" "$result_reason"
+end_session "failed" "$result_reason"
+```
+Report what actually remains broken (from the orchestrator's own failure report), and point the user at:
+1. Running `/devteam:implement` again with more context
+2. Breaking the task into smaller pieces (`/devteam:plan --feature "..."`)
+3. Manually addressing the blocking issue, then re-running
 
 ## Automatic Worktree Management
 
-**Worktrees are fully automatic.** Users never need to interact with worktrees directly - the system creates, uses, merges, and cleans them up transparently.
+**Worktrees are fully automatic.** Users never need to interact with worktrees directly. This command does not create, isolate, merge, or clean up worktrees itself -- `orchestration:sprint-orchestrator` owns worktree creation and per-track isolation (its "Agent Teams Mode" section, triggered when a plan has `parallel_tracks.track_info` with multiple tracks), and `orchestration:track-merger` owns merging tracks back together once all are complete. This command's only job re: worktrees is passing `--show-worktrees` through as debug context when present, and pointing users at `/devteam:worktree status`/`/devteam:worktree list` for diagnostics if something looks wrong.
 
-### When Worktrees Are Created
-
-Worktrees are automatically created when:
-- A plan has multiple parallel tracks (detected from state file)
-- The plan was designed with `parallel_tracks.mode: "worktrees"` in state
-
-```javascript
-// Auto-detect and create worktrees at execution start
-async function initializeExecution(plan) {
-    const parallelTracks = plan.parallel_tracks?.track_info
-
-    if (parallelTracks && Object.keys(parallelTracks).length > 1) {
-        // Multiple tracks - use worktrees for isolation
-        for (const [trackId, trackInfo] of Object.entries(parallelTracks)) {
-            const worktreePath = `.multi-agent/track-${trackId}`
-            const branchName = `dev-track-${trackId}`
-
-            if (!existsSync(worktreePath)) {
-                // Create worktree silently
-                await exec(`git worktree add ${worktreePath} -b ${branchName}`)
-                log_event('worktree_created', { track: trackId, path: worktreePath })
-            }
-        }
-    }
-}
-```
-
-### Worktree Isolation During Execution
-
-Each track's sprints execute in their isolated worktree:
-
-```javascript
-async function executeTrackSprint(trackId, sprintId) {
-    const worktreePath = `.multi-agent/track-${trackId}`
-
-    // Change to worktree directory for all operations
-    process.chdir(worktreePath)
-
-    try {
-        await executeSprint(sprintId)
-
-        // Auto-commit progress
-        await exec('git add -A')
-        await exec(`git commit -m "Complete ${sprintId} in track ${trackId}"`)
-
-        // Auto-push for backup (silent failure ok)
-        await exec(`git push -u origin dev-track-${trackId}`)
-    } finally {
-        // Return to main repo
-        process.chdir(mainRepoPath)
-    }
-}
-```
-
-### Automatic Merge on Completion
-
-When all tracks are complete, auto-merge occurs:
-
-```javascript
-async function checkAndAutoMerge() {
-    const state = loadState()
-    const tracks = state.parallel_tracks?.track_info
-
-    if (!tracks) return  // Single track, no merge needed
-
-    // Check if all tracks complete
-    const allComplete = Object.values(tracks).every(t => t.status === 'completed')
-
-    if (allComplete) {
-        console.log('All tracks complete - auto-merging...')
-
-        // Merge each track sequentially
-        for (const trackId of Object.keys(tracks).sort()) {
-            const branchName = `dev-track-${trackId}`
-
-            // Merge with descriptive commit
-            await exec(`git merge ${branchName} -m "Merge track ${trackId}: ${tracks[trackId].name}"`)
-
-            log_event('track_merged', { track: trackId })
-        }
-
-        // Auto-cleanup worktrees
-        await cleanupWorktrees()
-
-        log_event('all_tracks_merged', { count: Object.keys(tracks).length })
-    }
-}
-```
-
-### Automatic Cleanup
-
-After successful merge, worktrees are removed automatically:
-
-```javascript
-async function cleanupWorktrees() {
-    const worktreeDir = '.multi-agent'
-
-    // Get all worktrees
-    const worktrees = await exec('git worktree list --porcelain')
-
-    for (const worktree of parseWorktrees(worktrees)) {
-        if (worktree.path.includes('.multi-agent')) {
-            // Remove worktree (keeps branch for history)
-            await exec(`git worktree remove ${worktree.path}`)
-            log_event('worktree_removed', { path: worktree.path })
-        }
-    }
-
-    // Remove .multi-agent directory if empty
-    if (existsSync(worktreeDir) && readdirSync(worktreeDir).length === 0) {
-        rmdirSync(worktreeDir)
-    }
-}
-```
-
-### Debug Flag
-
-For advanced users who want to see worktree operations:
-
-```bash
-/devteam:implement --sprint 1 --show-worktrees
-```
-
-### Important Notes
-
-- **Users never need to run worktree commands** - everything is automatic
-- Worktrees are created in `.multi-agent/` (gitignored)
-- Branches are kept after merge for history (use `--delete-branches` in debug commands to remove)
-- If something goes wrong, use `/devteam:worktree status` for diagnostics
+- Worktrees live in `.multi-agent/` (gitignored) or `.claude/worktrees/` (native isolation)
+- Branches are kept after merge for history
+- Debug: `/devteam:implement --sprint 1 --show-worktrees`
 
 ## Sprint Execution
 
-When executing a sprint (`--sprint` or `--all`):
-
-```javascript
-async function executeSprint(sprintId) {
-    const sprint = await loadSprint(sprintId)
-    set_active_sprint(sprintId)
-
-    for (const task of sprint.tasks) {
-        log_task_started(task.id, task.description)
-
-        try {
-            await executeTask(task)
-            log_task_completed(task.id)
-        } catch (error) {
-            log_task_failed(task.id, error.message)
-            // Continue to next task or abort based on task priority
-            if (task.blocking) throw error
-        }
-    }
-
-    // Sprint complete
-    updateSprintStatus(sprintId, 'completed')
-}
-```
+Sprint and all-sprints execution (`--sprint`, `--all`) is entirely owned by `orchestration:sprint-orchestrator` (task sequencing, dependency-aware parallelization, per-task delegation to Task Loop, sprint-level validation) -- see Phase 5 above and `agents/orchestration/sprint-orchestrator.md`. This command does not loop over sprint tasks itself.
 
 ## User Communication
 
@@ -502,25 +331,7 @@ Retrying with enhanced reasoning...
 
 ## Cost Tracking
 
-Track costs in real-time:
-
-```javascript
-// After each agent call
-const cost = calculateCost(model, tokensInput, tokensOutput)
-add_tokens(tokensInput, tokensOutput, cost)
-log_agent_completed(agent, model, filesChanged, tokensInput, tokensOutput, cost)
-
-// Cost calculation (cents)
-function calculateCost(model, input, output) {
-    const rates = {
-        haiku: { input: 0.025, output: 0.125 },   // per 1K tokens
-        sonnet: { input: 0.3, output: 1.5 },
-        opus: { input: 1.5, output: 7.5 }
-    }
-    const rate = rates[model]
-    return Math.ceil((input * rate.input + output * rate.output) / 10)
-}
-```
+Cost is tracked in real time by the `log_agent_started`/`log_agent_completed` calls made throughout Phase 5 (and by every sub-agent Task Loop and Sprint Orchestrator dispatch internally) -- `agent_runs.cost_cents` is the single source of truth (`scripts/cost-tracking.sh` reads/formats it, it does not compute a second figure). This command does not compute cost rates itself; see `scripts/cost-tracking.sh`'s `calculate_cost()` for the authoritative per-model rates.
 
 ## Error Handling
 
