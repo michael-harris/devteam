@@ -123,6 +123,15 @@
       "model_strategy": "fixed"
     },
     {
+      "id": "orchestration:execution-ledger",
+      "name": "Execution Ledger",
+      "description": "Renders cost, tokens, agent calls, and orchestrator involvement per task/sprint into a human-browsable devteam-reports/ folder",
+      "file": "agents/orchestration/execution-ledger.md",
+      "model": "haiku",
+      "category": "orchestration",
+      "model_strategy": "fixed"
+    },
+    {
       "id": "diagnosis:root-cause-analyst",
       "name": "Root Cause Analyst",
       "description": "Bug Council member - Error analysis, hypothesis generation, causal chains",

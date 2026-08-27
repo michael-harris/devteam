@@ -6,7 +6,7 @@ This document describes the directory structure of the DevTeam plugin and the fi
 
 ```
 devteam/
-├── agent-registry.json         # Agent and command registry (125 agents, 20 commands)
+├── agent-registry.json         # Agent and command registry (126 agents, 20 commands)
 ├── README.md                   # Main documentation
 │
 ├── commands/                   # Slash command definitions
@@ -46,14 +46,15 @@ devteam/
 ├── .mcp.json                  # Bundled MCP server configs (GitHub, Memory)
 ├── .lsp.json                  # Language server configs (8 languages)
 │
-├── agents/                     # Agent definitions (125 agents)
+├── agents/                     # Agent definitions (126 agents)
 │   ├── planning/               # Planning agents (3)
 │   │   ├── prd-generator.md
 │   │   ├── task-graph-analyzer.md
 │   │   └── sprint-planner.md
-│   ├── orchestration/          # Orchestration agents (9; autonomous-controller.md and sprint-loop.md deprecated to docs/deprecated/, folded into sprint-orchestrator.md)
+│   ├── orchestration/          # Orchestration agents (10; autonomous-controller.md and sprint-loop.md deprecated to docs/deprecated/, folded into sprint-orchestrator.md)
 │   │   ├── bug-council-orchestrator.md
 │   │   ├── code-review-coordinator.md
+│   │   ├── execution-ledger.md
 │   │   ├── quality-gate-enforcer.md
 │   │   ├── requirements-validator.md
 │   │   ├── scope-validator.md
@@ -259,6 +260,15 @@ your-project/
 │       ├── SPRINT-002.json
 │       └── ...
 │
+├── devteam-reports/             # Human-browsable execution ledger (git-tracked, NOT gitignored -- unlike .devteam/)
+│   ├── INDEX.md                 # Running dashboard: all sprints, cumulative cost/tokens, links
+│   ├── sprints/
+│   │   ├── SPRINT-001.md
+│   │   └── ...
+│   └── tasks/
+│       ├── TASK-001.md
+│       └── ...
+│
 └── .multi-agent/               # Worktrees (temporary, auto-managed)
     ├── track-01/               # Track 1 worktree
     ├── track-02/               # Track 2 worktree
@@ -369,6 +379,9 @@ Sprint definitions grouping tasks:
 }
 ```
 
+### `devteam-reports/`
+Rendered by `orchestration:execution-ledger` (dispatched by `task-loop.md` per task and `sprint-orchestrator.md` per sprint) from the SQLite state described above -- it is a reporting layer, not a second copy of the data. Unlike everything else on this page, it is meant to be committed: it's a project record of cost, tokens, agent calls, and orchestrator involvement per task/sprint, not internal runtime state. See `agents/orchestration/execution-ledger.md` for the exact report contents.
+
 ## Temporary Files
 
 ### `.multi-agent/`
@@ -391,6 +404,8 @@ Add to your `.gitignore`:
 
 # Keep config in version control
 !.devteam/task-loop-config.yaml
+
+# devteam-reports/ is a kept project record, not runtime state -- do NOT gitignore it
 ```
 
 ## Cleaning Up

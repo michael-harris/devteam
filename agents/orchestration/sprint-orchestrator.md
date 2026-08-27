@@ -219,6 +219,7 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
    - Create sprint execution log
    - Track start time and resources
    - Mark sprint as "in_progress" in SQLite: `set_phase "in_progress"`
+   - **Record which sprint this session belongs to:** `set_active_sprint "$sprint_id"` (writes `sessions.sprint_id` -- this is the only place in the codebase that populates it, and `orchestration:execution-ledger` (Step 8 below) depends on this column to resolve "which agent_runs belong to this sprint" without a schema change). `set_active_sprint` already existed in `scripts/state.sh` but was never called anywhere before this -- do not skip it, and do not reintroduce the gap by moving sprint execution to a path that bypasses this step.
    - State is persisted automatically
 
 2. Analyze task dependencies
@@ -325,6 +326,22 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
    - Include path to sprint report
    - Show next sprint to execute (if any)
    - Show resume command if interrupted
+
+8. Execution Ledger (best-effort, non-blocking):
+   - Once the sprint reaches a terminal outcome (all Step 4 sub-checks PASS, or a HALT that ends this invocation), dispatch `orchestration:execution-ledger` to render `devteam-reports/sprints/SPRINT-XXX.md`:
+     ```bash
+     source scripts/events.sh
+     EL_RUN_ID=$(log_agent_started "orchestration:execution-ledger" "haiku" "" \
+         "orchestration:sprint-orchestrator" "$own_run_id")
+     ```
+     ```
+     Task({
+       subagent_type: "orchestration:execution-ledger",
+       model: "haiku",
+       prompt: "... report_type: 'sprint', sprint_id, db_path: '.devteam/devteam.db' ..."
+     })
+     ```
+     Close out the run as usual, but a failure here is a warning only -- it must never flip a genuinely completed sprint to failed, and must never be retried by re-running sprint-level validation.
 ```
 
 ## Failure Handling
@@ -746,3 +763,9 @@ Or merge directly:
 - Documentation update is MANDATORY - no exceptions
 - Escalate to human after 3 failed fix attempts
 - Generate detailed logs for debugging and auditing
+
+## See Also
+
+- `orchestration/task-loop.md` - Dispatched per task (Step 3b above)
+- `orchestration/execution-ledger.md` - Dispatched at sprint completion (Step 8 above); renders `devteam-reports/sprints/SPRINT-XXX.md`. Depends on `set_active_sprint` being called in Step 1 of this file.
+- `docs/deprecated/sprint-loop.md` - Design history for the sprint-level validation phase folded into Step 4 above

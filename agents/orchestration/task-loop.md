@@ -357,6 +357,24 @@ evaluate_results:
     - continue: next_iteration
 ```
 
+### Step 4 - Execution Ledger (terminal states only, best-effort)
+
+Once the task reaches a terminal state — `complete_task` above, or a HALT/max-iterations failure — dispatch `orchestration:execution-ledger` to render `devteam-reports/tasks/TASK-XXX.md`. This call is **best-effort and non-blocking**: log the dispatch the same way as any other sub-agent, but do NOT gate the task's own completion/failure status on this call's outcome. If it errors or the DB is unreachable, log a warning and proceed exactly as if the task had no report — the task's real status (already recorded in SQLite by the steps above) is unaffected.
+
+```bash
+source scripts/events.sh
+EL_RUN_ID=$(log_agent_started "orchestration:execution-ledger" "haiku" "$task_id" \
+    "orchestration:task-loop" "$own_run_id")
+```
+```
+Task({
+  subagent_type: "orchestration:execution-ledger",
+  model: "haiku",
+  prompt: "... report_type: 'task', task_id, implementation_summary (the final implementer output, including its [TASK-XXX-COMPLETION] self-review block if one was emitted), db_path: '.devteam/devteam.db' ..."
+})
+```
+Close out the run (`log_agent_completed`/`log_agent_failed` as usual) but treat a failure here as a warning only — never re-enter the iteration loop or change `complete_task`/failure outcome because this call failed.
+
 ## Bug Council Activation
 
 When opus fails 3 times or stuck loop detected:
@@ -711,3 +729,4 @@ Session Start
 - `orchestration/requirements-validator.md` - Validates acceptance criteria
 - `orchestration/workflow-compliance.md` - Step 3.5 gate before a task can be marked complete
 - `orchestration/bug-council-orchestrator.md` - Activated when stuck
+- `orchestration/execution-ledger.md` - Step 4, dispatched (best-effort) after the task reaches a terminal state; renders `devteam-reports/tasks/TASK-XXX.md`
