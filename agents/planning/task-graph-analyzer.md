@@ -38,10 +38,25 @@ Extract all features from must-have and should-have requirements
 
 **Task Sizing:** 1-2 days maximum (4-16 hours) — see `estimated_hours` below; this is guidance, not a hard schema limit.
 
-### 4. Analyze Dependencies
+### 4. Emit Design Tasks (Structural Rule)
+
+Every UI-bearing task — any task with `task_type: "frontend"` or `task_type: "fullstack"` — MUST depend on a `task_type: "design"` task covering the same `feature_ref`. This is a structural rule enforced here, not a convention left to whoever runs `/devteam:design` later (Architecture Audit §5, §10.1 principle 3: "Design is a task type, not an optional side command").
+
+**Process:**
+1. Group all `frontend`/`fullstack` tasks by `feature_ref`.
+2. For each such feature, create exactly ONE `design` task (not one per implementation task — several frontend/fullstack tasks sharing a feature share the same design task) with:
+   - `suggested_agent`: a `ux:*` agent (e.g. `ux:ux-system-coordinator`), or a platform specialist (`mobile:ios-designer`/`mobile:android-designer`) when the feature is platform-specific
+   - `acceptance_criteria` covering component specs, tokens, layout, and responsive/platform behavior for that feature
+   - No dependency on the frontend/fullstack tasks it precedes (it must be able to run first)
+3. Add the design task's id to the `dependencies` array of every `frontend`/`fullstack` task sharing that `feature_ref`.
+4. A feature with no `frontend`/`fullstack` tasks gets no design task — this rule only fires for those two task types.
+
+Run this before dependency-cycle validation in step 5 so the added edges are included in that check.
+
+### 5. Analyze Dependencies
 Build dependency graph with no circular dependencies
 
-### 5. Calculate Maximum Parallel Tracks
+### 6. Calculate Maximum Parallel Tracks
 
 **Algorithm: Critical Path Analysis**
 
@@ -76,7 +91,7 @@ At any given time, 2 tasks can run in parallel:
 - Reasoning (show the chains)
 - Recommendation for optimal parallelization
 
-### 6. Generate Task Files
+### 7. Generate Task Files
 Create `docs/planning/tasks/TASK-XXX.json` for each task, matching `.devteam/schemas/task.schema.json` exactly:
 
 ```json
@@ -111,7 +126,7 @@ Create `docs/planning/tasks/TASK-XXX.json` for each task, matching `.devteam/sch
 
 `feature_ref` uses the PRD's `REQ-XXX` requirement ids (from `.devteam/schemas/prd.schema.json`), not the feature-enumeration `FEAT-XXX` ids from `.devteam/features.json` — those are a separate, more granular id space for verification tracking, not for task-to-requirement traceability.
 
-### 7. Create Summary
+### 8. Create Summary
 Generate `docs/planning/TASK_SUMMARY.md`
 
 **Include in summary:**
@@ -149,18 +164,19 @@ Longest chain: Chain 1 (Backend) - 20 hours
 - If using >3 tracks, some tracks will have idle time
 
 **Recommendation:**
-To enable parallel development, use: `/devteam:plan 3`
+To enable parallel development, re-run planning with: `/devteam:plan --tracks 3`
 
 This will organize tasks into 3 balanced development tracks that can be executed in parallel.
 ```
 
-### 8. Create Dependency Graph Visualization
+### 9. Create Dependency Graph Visualization
 Generate `docs/planning/task-dependency-graph.md` with visual representation
 
 ## Quality Checks
 - ✅ All PRD requirements covered
 - ✅ Each task is 1-2 days max
 - ✅ All tasks have correct type assigned
+- ✅ Every frontend/fullstack task depends on a design task for its feature_ref
 - ✅ Dependencies are logical
 - ✅ No circular dependencies
 - ✅ Max parallel tracks calculated correctly
