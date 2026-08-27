@@ -12,8 +12,12 @@ ux:
     secondary: [mobile]
 
   design_system:
-    tokens_path: "design/tokens/"
-    components_path: "design/components/"
+    # Must match the detection locations in task-loop-config.yaml's
+    # design_compliance gate and agents/ux/design-compliance-validator.md /
+    # design-drift-detector.md -- do not diverge from "design-system/" here,
+    # it silently breaks detection for all of them (Architecture Audit Phase 4).
+    tokens_path: "design-system/tokens/"
+    components_path: "design-system/components/"
 
   validation:
     check_consistency: true

@@ -226,6 +226,7 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
    - Identify parallelizable tasks
    - Determine execution order
    - Filter out completed tasks (check SQLite state)
+   - **Design tasks are handled here, not as a separate dispatch path:** `planning:task-graph-analyzer` structurally emits a `task_type: "design"` task as a dependency of every `frontend`/`fullstack` task sharing its `feature_ref` (Architecture Audit §5, §10.1 principle 3). Because this is a normal dependency edge, the dependency-ordering step above already guarantees the design task (`suggested_agent: ux:*` or `mobile:{ios,android}-designer`) is dispatched via `orchestration:task-loop` and completes -- producing `design-system/` (web) or `docs/design/mobile/TASK-XXX-*.yaml` (mobile) -- before any dependent UI task starts. No separate "check for pending design dependency" step is needed; do not add a bespoke branch here that duplicates the dependency graph.
 
 3. For each task group (parallel or sequential):
 

@@ -667,9 +667,13 @@ design_specs:
 ### Upstream Dependencies
 | Agent | Purpose |
 |-------|---------|
-| `frontend:designer` | Provides design specifications |
+| `mobile:ios-designer` | Provides iOS design specifications (Architecture Audit §5: this was previously misdirected at `frontend:designer`, the web spec agent) |
 | `orchestration/sprint-orchestrator` | Task assignment |
 | `backend/api-designer` | API contract reference |
+
+### Reading the Design Spec (MANDATORY for UI-bearing tasks)
+
+Every `frontend`/`fullstack`-typed task targeting iOS depends on a `task_type: "design"` task assigned to `mobile:ios-designer` (Architecture Audit §5, §10.1 principle 3). Before implementing a screen, read that task's output at `docs/design/mobile/TASK-XXX-<screen>.yaml` if it exists, and follow its `layout`, `components`, `colors`, `typography`, and `accessibility` sections rather than inventing layout decisions from acceptance criteria alone.
 
 ### Downstream Consumers
 | Agent | Purpose |

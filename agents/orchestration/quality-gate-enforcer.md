@@ -2,7 +2,7 @@
 name: quality-gate-enforcer
 description: "Runs all quality gates (tests, lint, types, security) and reports results"
 model: opus
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Task
 memory: project
 ---
 # Quality Gate Enforcer Agent
@@ -48,6 +48,36 @@ You execute quality validation checks and report results. You do NOT fix issues 
 | Performance | Project-defined | Report metrics |
 | Accessibility | WCAG 2.1 AA | Report issues |
 
+### Design Compliance Gate (Frontend Tasks Only, Runs First)
+
+Reads `.devteam/design-enforcement.yaml` (falls back to `.devteam/task-loop-config.yaml`'s `quality_gates.design_compliance` block if that file is missing) for detection locations and severity levels.
+
+```yaml
+design_compliance_gate:
+  runs_when:
+    - any changed_files match: ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss"]
+    - AND a design-system/ (or .design-system/, src/design-system/, styles/design-system/) directory exists with at least MASTER.md
+
+  action: |
+    Delegate to ux:design-compliance-validator -- do NOT scan for violations yourself:
+    Task({
+      subagent_type: "ux:design-compliance-validator",
+      model: "haiku",
+      prompt: "... task_id, changed_files, design system location ..."
+    })
+
+  on_result:
+    pass: proceed to Step 1 (other gates run as normal)
+    fail_error_severity: set overall_status = FAIL, include violations in blocking_issues, do NOT run remaining gates first -- report immediately per priority:high (matches design-enforcement.yaml's block_on_violations)
+    fail_warning_severity_only: log violations in the report, proceed to Step 1 (does not block)
+
+  skip_when: |
+    No design-system/ directory found (nothing to validate against -- this is
+    normal for non-UI tasks and for the first frontend task before a design
+    task has run) or no frontend files changed. Report this gate as
+    "not_applicable", not "FAIL".
+```
+
 ### Hybrid Testing Gate (For Web Frontends)
 
 When the project has a web frontend, the hybrid testing gate is activated:
@@ -92,6 +122,10 @@ hybrid_testing_gate:
 ```
 
 ## Execution Process
+
+### Step 0: Design Compliance Gate (If Applicable)
+
+Run the Design Compliance Gate described above first, before any other gate. See "skip_when" above for when this step is a no-op.
 
 ### Step 1: Detect Project Configuration
 
@@ -229,6 +263,11 @@ quality_gate_result:
   timestamp: "2025-01-30T10:00:00Z"
 
   gates:
+    design_compliance:
+      status: PASS | FAIL | not_applicable
+      violations: []
+      # e.g. [{file: "src/components/Button.tsx", line: 45, type: "hardcoded_color", found: "#6366F1", should_use: "var(--color-primary)"}]
+
     tests:
       status: PASS | FAIL
       passed: 45
@@ -349,3 +388,5 @@ task_loop_integration:
 - `orchestration/task-loop.md` - Calls this agent, handles iteration
 - `orchestration/requirements-validator.md` - Validates acceptance criteria
 - `quality/runtime-verifier.md` - Handles runtime verification
+- `ux/design-compliance-validator.md` - Delegate for the Design Compliance Gate
+- `.devteam/design-enforcement.yaml` - Design compliance detection/severity config
