@@ -398,6 +398,22 @@ bug_council_activation:
     - architectural_insights
 ```
 
+Log the dispatch and then make the actual call — the trigger table above describes *when*, this is *how*:
+
+```bash
+source scripts/events.sh
+BC_RUN_ID=$(log_agent_started "orchestration:bug-council-orchestrator" "opus" "$task_id" \
+    "orchestration:task-loop" "$own_run_id")
+```
+```
+Task({
+  subagent_type: "orchestration:bug-council-orchestrator",
+  model: "opus",
+  prompt: "... task_id, failure_history (all prior iteration results), attempted_fixes, error_context, code_changes (git diff of the failed attempts) ..."
+})
+```
+Close out the run (`log_agent_completed`/`log_agent_failed`) once the council returns. Treat a Bug Council error (not a diagnosis result, but the call itself failing) as a HALT — do not silently skip to a new implementation attempt without a diagnosis, since that would just repeat the same stuck loop.
+
 ### Post-Bug Council Workflow
 
 After Bug Council completes diagnosis:

@@ -44,6 +44,66 @@ phase_3_synthesis:
   - Run pre-delivery checklist
 ```
 
+### Phase 2 Delegation Calls
+
+The table above is the plan; every row is dispatched as a real `Task()` call, not just described. Your caller (typically `ux:ux-system-coordinator`) should have logged an `own_run_id` via `log_agent_started "ux:design-system-orchestrator" ...` before invoking you — thread it through so `ux-system-coordinator -> design-system-orchestrator -> {specialist}` stays reconstructable via `v_agent_call_chain`:
+
+```bash
+source scripts/events.sh
+```
+
+**Parallel group** (style + color have no dependency on each other):
+```
+STYLE_RUN_ID=$(log_agent_started "ux:ui-style-curator" "sonnet" "" \
+    "ux:design-system-orchestrator" "$own_run_id")
+Task({
+  subagent_type: "ux:ui-style-curator",
+  model: "sonnet",
+  prompt: "... industry, type, style_preference: recommend top 3 styles with rationale, plus relevant UX rules/anti-patterns ..."
+})
+```
+```
+COLOR_RUN_ID=$(log_agent_started "ux:color-palette-specialist" "sonnet" "" \
+    "ux:design-system-orchestrator" "$own_run_id")
+Task({
+  subagent_type: "ux:color-palette-specialist",
+  model: "sonnet",
+  prompt: "... industry, selected/candidate style: generate a complete color system with semantic colors ..."
+})
+```
+
+**Sequential group** (each depends on the previous step's output):
+```
+TYPO_RUN_ID=$(log_agent_started "ux:typography-specialist" "sonnet" "" \
+    "ux:design-system-orchestrator" "$own_run_id")
+Task({
+  subagent_type: "ux:typography-specialist",
+  model: "sonnet",
+  prompt: "... selected style from ux:ui-style-curator: select fonts and define the type scale ..."
+})
+```
+```
+# Only if the request is a dashboard/analytics type (per Request Format's `type` field)
+DATAVIZ_RUN_ID=$(log_agent_started "ux:data-visualization-designer" "sonnet" "" \
+    "ux:design-system-orchestrator" "$own_run_id")
+Task({
+  subagent_type: "ux:data-visualization-designer",
+  model: "sonnet",
+  prompt: "... selected style, color system, typography: define chart/graph component specs ..."
+})
+```
+```
+ARCH_RUN_ID=$(log_agent_started "ux:design-system-architect" "sonnet" "" \
+    "ux:design-system-orchestrator" "$own_run_id")
+Task({
+  subagent_type: "ux:design-system-architect",
+  model: "sonnet",
+  prompt: "... components needed (Phase 1), style/color/typography outputs above: define component hierarchy and APIs ..."
+})
+```
+
+Close each dispatch with `log_agent_completed`/`log_agent_failed` as it returns, then proceed to Phase 3 Synthesis once all applicable calls have completed.
+
 ## Coordination Protocol
 
 ### Request Format

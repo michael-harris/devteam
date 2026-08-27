@@ -138,10 +138,59 @@ delegation:
     - Define component needs
 
   for_design_system:
-    - Coordinate with design-system-architect
+    - Delegate to ux:design-system-orchestrator
     - Request typography review if needed
     - Request color review if needed
 ```
+
+The table above describes *what* gets delegated; this is *how* — every delegation is a real `Task()` call, never just the narration above. If your own caller passed you an `own_run_id` (an implementer of the "Called By" agents in Integration Points below should have logged one via `log_agent_started "ux:ux-system-coordinator" ...` before dispatching you), thread it through so the call chain stays reconstructable:
+
+```bash
+source scripts/events.sh
+```
+
+**Per selected platform** — dispatch only the ones Step 2's `specialist_selection` chose for this project; each is a distinct literal `subagent_type`, not a template to fill in:
+
+```
+WEB_RUN_ID=$(log_agent_started "ux:ux-specialist-web" "sonnet" "" \
+    "ux:ux-system-coordinator" "$own_run_id")
+Task({
+  subagent_type: "ux:ux-specialist-web",
+  model: "sonnet",
+  prompt: "... platform requirements, accessibility standards, component needs from Step 1 analysis ..."
+})
+```
+```
+MOBILE_RUN_ID=$(log_agent_started "ux:ux-specialist-mobile" "sonnet" "" \
+    "ux:ux-system-coordinator" "$own_run_id")
+Task({
+  subagent_type: "ux:ux-specialist-mobile",
+  model: "sonnet",
+  prompt: "... platform requirements, accessibility standards, component needs from Step 1 analysis ..."
+})
+```
+```
+DESKTOP_RUN_ID=$(log_agent_started "ux:ux-specialist-desktop" "sonnet" "" \
+    "ux:ux-system-coordinator" "$own_run_id")
+Task({
+  subagent_type: "ux:ux-specialist-desktop",
+  model: "sonnet",
+  prompt: "... platform requirements, accessibility standards, component needs from Step 1 analysis ..."
+})
+```
+Close each with `log_agent_completed`/`log_agent_failed` before moving to the next platform.
+
+**For design-system work** (when `for_design_system` applies, i.e. `new_system` or `existing_system` per Step 2):
+```
+DS_RUN_ID=$(log_agent_started "ux:design-system-orchestrator" "sonnet" "" \
+    "ux:ux-system-coordinator" "$own_run_id")
+Task({
+  subagent_type: "ux:design-system-orchestrator",
+  model: "sonnet",
+  prompt: "... design_request: project, industry, type, style_preference, tech_stack, constraints (see ux:design-system-orchestrator's Request Format) ..."
+})
+```
+`ux:design-system-orchestrator` fans out to the token/style/typography/color/component specialists itself (see its own file) — do not call `ux:design-system-architect`, `ux:typography-specialist`, or `ux:color-palette-specialist` directly from here; that would duplicate its Phase 2 delegation and risk producing two disagreeing token sets.
 
 ### Step 4: Ensure Consistency
 

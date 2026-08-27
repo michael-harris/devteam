@@ -185,7 +185,17 @@ Add your agent to `agent-registry.json`:
 | `model` | No | Model tier: `opus`, `sonnet`, or `haiku` (default: sonnet) |
 | `category` | Yes | Agent category for organization |
 
-### 5. Test Your Agent
+### 5. Wire It Up (orchestration/planning/ux agents)
+
+If your new agent lives in `agents/orchestration/`, `agents/planning/`, or `agents/ux/`, it must be dispatched by at least one real `Task({ subagent_type: "..." })` call from a command, a skill, or another agent — not just described in prose. A CI check (`scripts/validate-agent-wiring.sh`, wired into `.github/workflows/validate-agent-wiring.yml`) fails the build on any agent in those three directories with zero live `subagent_type:` references anywhere in the repo. This exists because that exact failure mode — a well-written orchestrator agent that nothing ever calls — has happened twice in this repo's history (see `DEVTEAM Proposal.md` §9); the check exists to make sure it can't happen silently a third time.
+
+Before opening a PR, run it locally:
+
+```bash
+./scripts/validate-agent-wiring.sh
+```
+
+### 6. Test Your Agent
 
 ```bash
 # Run agent-specific tests
@@ -316,8 +326,17 @@ git checkout -b feature/my-feature
 # Run all tests
 ./tests/run-tests.sh
 
+# Confirm no orchestration/planning/ux agent was left orphaned
+./scripts/validate-agent-wiring.sh
+
 # Check shell scripts with shellcheck (if available)
 shellcheck scripts/*.sh scripts/lib/*.sh
+```
+
+CI (`.github/workflows/validate-agent-wiring.yml`) runs the wiring check automatically on every PR, but running it locally first is faster than waiting on a red check. To have it run automatically before every local commit, opt in with:
+
+```bash
+./scripts/install-git-hooks.sh
 ```
 
 ### 4. Commit with Descriptive Messages
