@@ -1,5 +1,7 @@
-# DevTeam Sprint Loop Configuration
-# Referenced by: orchestration/sprint-loop.md
+# DevTeam Sprint-Level Validation Configuration
+# Referenced by: orchestration/sprint-orchestrator.md (Step 4 -- sprint-level
+# validation folded in from the deprecated orchestration/sprint-loop.md;
+# see docs/deprecated/sprint-loop.md)
 # Defines sprint-level quality validation settings
 
 sprint_loop:

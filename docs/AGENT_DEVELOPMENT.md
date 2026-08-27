@@ -387,7 +387,7 @@ Check the current phase before acting:
 ## Examples of Good Agents
 
 Study these well-designed agents:
-- `agents/orchestration/autonomous-controller.md` - Orchestration example
+- `agents/orchestration/sprint-orchestrator.md` - Orchestration example
 - `agents/quality/test-writer.md` - Testing example
 - `agents/security/penetration-tester.md` - Security example
 

@@ -163,4 +163,4 @@ mvn com.h3xstream.findsecbugs:findsecbugs-maven-plugin:check
 ## See Also
 
 - `quality:security-auditor` - General security auditor
-- `orchestration:sprint-loop` - Calls for sprint security audit
+- `orchestration:sprint-orchestrator` - Calls for sprint security audit (Step 4 sprint-level validation)

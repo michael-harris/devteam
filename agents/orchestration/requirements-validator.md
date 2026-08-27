@@ -268,7 +268,7 @@ validation_result:
 
 ### Called By
 - `orchestration:task-loop` - After implementation, before completion
-- `orchestration:sprint-loop` - For sprint-level requirements validation
+- `orchestration:sprint-orchestrator` - For sprint-level requirements validation (Step 4)
 
 ### Works With
 - `orchestration:quality-gate-enforcer` - Runs after requirements pass

@@ -5,6 +5,16 @@
 
 set -euo pipefail
 
+# Idempotent-include guard: state.sh/events.sh/hook-common.sh already source
+# this file, so anything that sources one of those *and* sources this file
+# directly (as tests/run-tests.sh's test_* functions each do, to reach
+# sql_escape/validate_* in isolation) would otherwise hit "readonly variable"
+# on the second pass and abort under set -e.
+if [ -n "${_DEVTEAM_COMMON_LOADED:-}" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+_DEVTEAM_COMMON_LOADED=1
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================

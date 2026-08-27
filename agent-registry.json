@@ -1,7 +1,7 @@
 {
   "name": "devteam",
   "version": "4.0.0",
-  "description": "127-agent automated development system with Agent Teams support, native subagent configuration (tools/model/memory), Skills-based commands, prompt/agent hooks, native worktree isolation, path-specific CLAUDE.md rules, and split model strategy for dynamic escalation",
+  "description": "125-agent automated development system with Agent Teams support, native subagent configuration (tools/model/memory), Skills-based commands, prompt/agent hooks, native worktree isolation, path-specific CLAUDE.md rules, and split model strategy for dynamic escalation",
   "author": "Multi-Agent Development Team",
   "repository": "https://github.com/michael-harris/devteam",
   "agents": [
@@ -51,15 +51,6 @@
       "model_strategy": "fixed"
     },
     {
-      "id": "orchestration:sprint-loop",
-      "name": "Sprint Loop",
-      "description": "Sprint-level quality validation after all tasks complete",
-      "file": "agents/orchestration/sprint-loop.md",
-      "model": "opus",
-      "category": "orchestration",
-      "model_strategy": "fixed"
-    },
-    {
       "id": "orchestration:quality-gate-enforcer",
       "name": "Quality Gate Enforcer",
       "description": "Runs all quality gates (tests, lint, types, security) and reports results",
@@ -73,15 +64,6 @@
       "name": "Code Review Coordinator",
       "description": "Coordinates code reviews across language-specific reviewers",
       "file": "agents/orchestration/code-review-coordinator.md",
-      "model": "opus",
-      "category": "orchestration",
-      "model_strategy": "fixed"
-    },
-    {
-      "id": "orchestration:autonomous-controller",
-      "name": "Autonomous Controller",
-      "description": "Controls autonomous execution mode with stop hooks and persistence",
-      "file": "agents/orchestration/autonomous-controller.md",
       "model": "opus",
       "category": "orchestration",
       "model_strategy": "fixed"
@@ -107,7 +89,7 @@
     {
       "id": "orchestration:sprint-orchestrator",
       "name": "Sprint Orchestrator",
-      "description": "Manages entire sprint execution and coordinates task loop",
+      "description": "Manages entire sprint execution, coordinates task loop, and runs sprint-level validation (integration/security/performance/requirements/docs/code review/workflow compliance)",
       "file": "agents/orchestration/sprint-orchestrator.md",
       "model": "opus",
       "category": "orchestration",
@@ -1255,9 +1237,9 @@
       ]
     },
     "native_subagents": {
-      "description": "All 127 agents have native frontmatter (tools, model, memory)",
+      "description": "All 125 agents have native frontmatter (tools, model, memory)",
       "split_model_strategy": {
-        "fixed": "63 agents with model locked in frontmatter",
+        "fixed": "61 agents with model locked in frontmatter",
         "dynamic": "64 agents with model determined at runtime by Task Loop",
         "escalation_chain": "haiku -> sonnet -> opus -> Bug Council"
       }
@@ -1294,7 +1276,6 @@
         "orchestration:task-loop",
         "orchestration:sprint-orchestrator",
         "orchestration:quality-gate-enforcer",
-        "orchestration:autonomous-controller",
         "orchestration:bug-council-orchestrator",
         "research:research-agent"
       ]

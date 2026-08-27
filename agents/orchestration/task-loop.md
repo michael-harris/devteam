@@ -36,6 +36,11 @@ You do NOT:
 - Make implementation decisions
 - Fix issues yourself
 
+## Inputs
+
+- `task_id`: the TASK-XXX being executed, and its full task definition (acceptance criteria, `suggested_agent`, `complexity.score`, scope files)
+- `own_run_id`: the `agent_runs.id` your caller (`orchestration:sprint-orchestrator`, or a command dispatching you directly for a single `--task`/ad-hoc run) logged via `log_agent_started` before dispatching you. Pass this as `invoked_by_run_id` (with `invoked_by_agent="orchestration:task-loop"`) on every `log_agent_started` call you make for the sub-agents below, so the call chain is reconstructable via `v_agent_call_chain`. If empty (no caller attribution), your dispatches are simply recorded as parentless.
+
 ## Loop Architecture
 
 ```
@@ -260,6 +265,14 @@ iteration_start:
 
 ### Delegation Calls
 
+**Call-hierarchy logging:** Before every `Task()` call below, log the dispatch and capture the new run's id so you can close it out and so the dispatched agent can attribute its own sub-dispatches back to it:
+```bash
+source scripts/events.sh
+RUN_ID=$(log_agent_started "<subagent_type>" "<model>" "$task_id" \
+    "orchestration:task-loop" "$own_run_id")
+```
+After the `Task()` call returns, close the row: `log_agent_completed "<subagent_type>" "<model>" "<files_changed_json>" <tokens_in> <tokens_out> <cost_cents>` on success, or `log_agent_failed "<subagent_type>" "<model>" "<error_message>"` on failure.
+
 **Step 1 - Implementation:** Select model based on task complexity and failure count.
 ```
 Task({
@@ -311,6 +324,18 @@ Task({
 })
 ```
 
+**Step 3.5 - Workflow Compliance Check:** Only reached once quality gates AND requirements validation both PASS (see Iteration Decision below) -- this is the last gate before the task can be marked complete, per `orchestration:workflow-compliance`'s own documented "Task Loop Integration" contract (`agents/orchestration/workflow-compliance.md` "Integration with Orchestrators" section, which specified this call but was never actually wired up until now).
+```
+Task({
+  subagent_type: "orchestration:workflow-compliance",
+  model: "opus",
+  prompt: "... task_id, SQLite DB path (.devteam/devteam.db) ..."
+})
+```
+Workflow Compliance validates: the task summary exists and is complete, SQLite state was properly updated, the required agents (implementation, scope-validator, quality-gate-enforcer, requirements-validator) were actually called with evidence of execution (not just claimed), and no shortcuts were taken.
+- **If PASS:** proceed to `complete_task`.
+- **If FAIL:** treat exactly like a quality/requirements failure -- increment failure_count, fix the specific violations reported (e.g. missing task summary section, SQLite field not set), and re-run this check. Do NOT mark the task complete on a FAIL, even if quality gates and requirements validation both passed.
+
 ### Iteration Decision
 
 ```yaml
@@ -318,10 +343,13 @@ evaluate_results:
   if: quality.status == "HALT"
   then: halt_immediately
 
-  if: quality.status == "PASS" AND requirements.status == "PASS"
+  if: quality.status == "PASS" AND requirements.status == "PASS" AND workflow_compliance.status != "PASS"
+  then: run_workflow_compliance_check   # Step 3.5 above
+
+  if: quality.status == "PASS" AND requirements.status == "PASS" AND workflow_compliance.status == "PASS"
   then: complete_task
 
-  if: quality.status == "FAIL" OR requirements.status == "FAIL"
+  if: quality.status == "FAIL" OR requirements.status == "FAIL" OR workflow_compliance.status == "FAIL"
   then:
     - increment: failure_count
     - check: escalation_needed
@@ -420,6 +448,9 @@ get_kv_state "task.TASK-XXX.current_model"
   Status: {PASS/FAIL}
   Criteria: {met}/{total}
 
+[Workflow Compliance]
+  Status: {PASS/FAIL/not yet reached}
+
 [Decision]
   {COMPLETE | ITERATE | ESCALATE | HALT}
   Reason: {reason}
@@ -447,6 +478,9 @@ Final Model: opus
 
 [Requirements]
   All criteria met: YES (5/5)
+
+[Workflow Compliance]
+  Status: PASS
 
 [Model Usage]
   Haiku:  0 calls
@@ -672,7 +706,8 @@ Session Start
 
 ## See Also
 
-- `orchestration/sprint-loop.md` - Sprint-level quality loop
+- `orchestration/sprint-orchestrator.md` - Dispatches this agent per task, and runs sprint-level validation (folded in from the former Sprint Loop) after all tasks complete
 - `orchestration/quality-gate-enforcer.md` - Runs quality checks
 - `orchestration/requirements-validator.md` - Validates acceptance criteria
+- `orchestration/workflow-compliance.md` - Step 3.5 gate before a task can be marked complete
 - `orchestration/bug-council-orchestrator.md` - Activated when stuck

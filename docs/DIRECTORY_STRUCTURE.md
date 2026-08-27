@@ -6,7 +6,7 @@ This document describes the directory structure of the DevTeam plugin and the fi
 
 ```
 devteam/
-├── agent-registry.json         # Agent and command registry (127 agents, 20 commands)
+├── agent-registry.json         # Agent and command registry (125 agents, 20 commands)
 ├── README.md                   # Main documentation
 │
 ├── commands/                   # Slash command definitions
@@ -46,19 +46,17 @@ devteam/
 ├── .mcp.json                  # Bundled MCP server configs (GitHub, Memory)
 ├── .lsp.json                  # Language server configs (8 languages)
 │
-├── agents/                     # Agent definitions (127 agents)
+├── agents/                     # Agent definitions (125 agents)
 │   ├── planning/               # Planning agents (3)
 │   │   ├── prd-generator.md
 │   │   ├── task-graph-analyzer.md
 │   │   └── sprint-planner.md
-│   ├── orchestration/          # Orchestration agents (11)
-│   │   ├── autonomous-controller.md
+│   ├── orchestration/          # Orchestration agents (9; autonomous-controller.md and sprint-loop.md deprecated to docs/deprecated/, folded into sprint-orchestrator.md)
 │   │   ├── bug-council-orchestrator.md
 │   │   ├── code-review-coordinator.md
 │   │   ├── quality-gate-enforcer.md
 │   │   ├── requirements-validator.md
 │   │   ├── scope-validator.md
-│   │   ├── sprint-loop.md
 │   │   ├── sprint-orchestrator.md
 │   │   ├── task-loop.md
 │   │   ├── track-merger.md
@@ -237,7 +235,7 @@ your-project/
 │   │   ├── bugs                # Bug tracking
 │   │   └── escalations         # Model escalations
 │   ├── task-loop-config.yaml   # Configuration file
-│   ├── sprint-loop-config.yaml # Sprint loop settings
+│   ├── sprint-loop-config.yaml # Sprint-level validation settings (read by sprint-orchestrator.md)
 │   ├── task-loop-config.yaml   # Task loop settings
 │   ├── test-config.yaml        # Test execution config
 │   ├── testing-config.yaml     # Testing strategy config

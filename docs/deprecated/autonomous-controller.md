@@ -1,11 +1,13 @@
+> **DEPRECATED (Architecture Audit Phase 3, 2026-08-27):** This agent was never invoked by anything -- not a command, not a hook, not another agent (see `docs/reviews/ARCHITECTURE_AUDIT_2026-08-26.md` §7, §9.2 target architecture: "Retire `autonomous-controller` as a separate agent; make 'autonomous mode' a flag `sprint-orchestrator` honors directly, governed by the Stop hook"). That flag now exists: `agents/orchestration/sprint-orchestrator.md`'s "Execution Mode: `normal` vs `autonomous`" section sets/clears the `.devteam/autonomous-mode` marker file directly, which the already-functional `hooks/stop-hook.sh` (`is_autonomous_mode()`, circuit breaker, max-iterations -- all reading `.devteam/config.yaml` per Phase 0) uses to decide whether to keep the session looping. This file is kept for design history only -- it is no longer registered in `agent-registry.json` or `features.auto_memory.agents`, and must not be reintroduced as a fourth orchestration layer.
+
 ---
 name: autonomous-controller
-description: "Controls autonomous execution mode with stop hooks and persistence"
+description: "DEPRECATED -- superseded by orchestration:sprint-orchestrator's mode: autonomous flag. Kept for design-history reference only."
 model: opus
 tools: Read, Glob, Grep, Bash, Task
 memory: project
 ---
-# Autonomous Controller Agent
+# Autonomous Controller Agent (deprecated)
 
 **Model:** opus
 **Purpose:** Manage autonomous execution loop and state transitions
