@@ -78,6 +78,38 @@ design_compliance_gate:
     "not_applicable", not "FAIL".
 ```
 
+### Self-Review Report Gate (Runs Second, Right After Design Compliance)
+
+Checks that the implementer emitted a valid, non-trivial `[TASK-XXX-COMPLETION]` self-review report before spending time running tests/lint/types/security on work the implementer never reasoned about itself. Reads `implementation_summary`, passed alongside `task_id`/`changed_files`/`project_root` (see Integration with Task Loop below).
+
+```yaml
+self_review_report_gate:
+  runs_when: always, immediately after the Design Compliance Gate and before Step 1
+
+  action: |
+    Check the `implementation_summary` you were given for a [TASK-XXX-COMPLETION] block matching
+    the task id, per the format defined in agents/templates/base-agent.md's "SELF-REVIEW
+    REQUIREMENT". Verify all five fields are present ("Requested behavior", "Regressions checked",
+    "Edge cases considered", "Confidence", "Open concerns"), "Confidence" is one of high/medium/low,
+    and each of the three reasoning fields contains a specific, checkable claim (per base-agent.md:
+    "Each of these three fields must contain a specific, checkable claim"). A field fails this check
+    if it is empty, OR if it is one of base-agent.md's illustrative forbidden examples (e.g. "N/A",
+    "none", "looks good", "no issues", "done", "completed", "works fine", "-", "TBD"), OR if it is
+    some other generic/reflexive phrase not on that list but equally unspecific (e.g. "seems fine",
+    "nothing major", "all good") -- the enumerated list is examples of the failure mode, not an
+    exhaustive list of every phrase to reject. This is a mechanical presence/non-triviality check, not
+    a judgment of implementation quality -- do not evaluate whether the reasoning is *correct*, only
+    whether it is present and specific.
+
+  on_result:
+    pass: proceed to Step 1 (other gates run as normal)
+    fail: >
+      set overall_status = FAIL, include in blocking_issues, do NOT run remaining gates first --
+      report immediately (same severity handling as the Design Compliance Gate's error-severity path)
+
+  skip_when: "never -- a missing implementation_summary or missing block is itself a FAIL, not not_applicable"
+```
+
 ### Hybrid Testing Gate (For Web Frontends)
 
 When the project has a web frontend, the hybrid testing gate is activated:
@@ -126,6 +158,10 @@ hybrid_testing_gate:
 ### Step 0: Design Compliance Gate (If Applicable)
 
 Run the Design Compliance Gate described above first, before any other gate. See "skip_when" above for when this step is a no-op.
+
+### Step 0.5: Self-Review Report Gate
+
+Run the Self-Review Report Gate described above second, immediately after Design Compliance and before any test/lint/type/security gate runs. Unlike Design Compliance, this gate never skips as "not_applicable" -- every task has an implementer, and every implementer is required to emit this report.
 
 ### Step 1: Detect Project Configuration
 
@@ -268,6 +304,11 @@ quality_gate_result:
       violations: []
       # e.g. [{file: "src/components/Button.tsx", line: 45, type: "hardcoded_color", found: "#6366F1", should_use: "var(--color-primary)"}]
 
+    self_review:
+      status: PASS | FAIL
+      missing_fields: []      # e.g. ["Edge cases considered"]
+      boilerplate_fields: []  # e.g. ["Regressions checked"] -- present but generic
+
     tests:
       status: PASS | FAIL
       passed: 45
@@ -358,6 +399,7 @@ task_loop_integration:
     - task_id
     - changed_files
     - project_root
+    - implementation_summary  # for the Self-Review Report Gate
 
   returns:
     - overall_status (PASS/FAIL/HALT)
@@ -385,8 +427,9 @@ task_loop_integration:
 
 ## See Also
 
+- `templates/base-agent.md` - Defines the `[TASK-XXX-COMPLETION]` self-review report format checked in Step 0.5
 - `orchestration/task-loop.md` - Calls this agent, handles iteration
-- `orchestration/requirements-validator.md` - Validates acceptance criteria
+- `orchestration/requirements-validator.md` - Validates acceptance criteria; runs its own Self-Review Report Gate independently
 - `quality/runtime-verifier.md` - Handles runtime verification
 - `ux/design-compliance-validator.md` - Delegate for the Design Compliance Gate
 - `.devteam/design-enforcement.yaml` - Design compliance detection/severity config

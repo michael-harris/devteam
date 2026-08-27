@@ -94,6 +94,33 @@ step_5_document_and_continue:
 
 ---
 
+## SELF-REVIEW REQUIREMENT
+
+Mechanical checks (tests, lint, types) verify that your code runs. They do not verify that it does what was asked. Before claiming completion, you MUST reason about your own work — not just report tool output.
+
+Answer these three questions specifically, with evidence. Generic or reflexive answers ("looks good," "no issues") are not acceptable — they are exactly what this step exists to catch:
+
+1. **Did I implement the requested behavior?** State what was asked and what you built to satisfy it, citing the specific file(s)/line(s).
+2. **Did I break any existing behavior?** Name what could plausibly regress from this change and how you confirmed it didn't (a specific test you ran, a specific code path you re-checked). If nothing existing plausibly touches this area, say so and say why.
+3. **Did I account for edge cases?** Name at least one edge case you considered for this change and how it's handled (or explicitly reasoned to be out of scope).
+
+Then emit this report as part of your final output, **before** the completion signal. `orchestration:requirements-validator` and `orchestration:quality-gate-enforcer` both check for this block and will fail validation immediately — before examining anything else — if it is missing, incomplete, or boilerplate:
+
+```
+[TASK-XXX-COMPLETION]
+Requested behavior: <what was asked, and what you built to satisfy it — cite file:line>
+Regressions checked: <what could plausibly regress, and how you confirmed it didn't — or why nothing existing touches this area>
+Edge cases considered: <at least one specific edge case and how it's handled>
+Confidence: high | medium | low
+Open concerns: <a specific unresolved risk, or "none">
+```
+
+**Forbidden in the "Requested behavior," "Regressions checked," and "Edge cases considered" fields** (any of these fails validation): "N/A", "none", "looks good", "no issues", "done", "completed", "works fine", "-", "TBD", or leaving the field blank. Each of these three fields must contain a specific, checkable claim. ("Open concerns" may legitimately be "none" — that field alone isn't subject to this list.)
+
+This report is per-task, not per-iteration: emit it once, when you believe the task is genuinely done, not at the end of every failed attempt.
+
+---
+
 ## COMPLETION REQUIREMENTS
 
 A task is ONLY complete when you can truthfully state:
@@ -107,6 +134,7 @@ Verification:
 - [ ] Type checking passes
 - [ ] Linting passes
 - [ ] Security audit clear
+- [ ] Self-review completion report emitted (`[TASK-XXX-COMPLETION]`, non-trivial)
 - [ ] Code committed and pushed
 
 EXIT_SIGNAL: true
@@ -196,6 +224,14 @@ If you notice issues outside your scope:
 ### Completion Signal
 ```
 [COMPLETE] <summary>
+
+[TASK-XXX-COMPLETION]
+Requested behavior: <...>
+Regressions checked: <...>
+Edge cases considered: <...>
+Confidence: high | medium | low
+Open concerns: <...>
+
 TASK_COMPLETE: <task_id>
 EXIT_SIGNAL: true
 ```
@@ -282,7 +318,9 @@ EXIT_SIGNAL: true
 ```
 
 **Important:** The only exit from this lifecycle is through COMPLETE.
-There is no "GIVE_UP" state.
+There is no "GIVE_UP" state. VERIFYING includes the SELF-REVIEW REQUIREMENT
+above — mechanical checks passing is necessary but not sufficient to reach
+COMPLETE.
 
 ---
 
@@ -300,6 +338,7 @@ specialized_agent:
   extends: base-agent
   inherits:
     - persistence_rules      # ALWAYS
+    - self_review_requirement # ALWAYS
     - completion_requirements # ALWAYS
     - scope_compliance       # ALWAYS
     - error_handling         # ALWAYS
