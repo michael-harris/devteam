@@ -35,6 +35,40 @@ You do NOT:
 
 ## Validation Process
 
+### Step 0: Self-Review Report Gate (Runs First)
+
+Before validating acceptance criteria, check that the implementer emitted a valid, non-trivial `[TASK-XXX-COMPLETION]` self-review report — defined in `agents/templates/base-agent.md`'s "SELF-REVIEW REQUIREMENT". This gate exists so acceptance-criteria validation effort is never spent on work the implementer never reasoned about itself.
+
+```yaml
+self_review_report_gate:
+  runs_when: always, before Step 1
+
+  checks:
+    - block_present: "the implementation_summary you were given contains a [TASK-XXX-COMPLETION] block for the task being validated"
+    - all_fields_present: "Requested behavior, Regressions checked, Edge cases considered, Confidence, Open concerns are all present"
+    - confidence_valid: "Confidence is exactly one of: high, medium, low"
+    - non_boilerplate: >
+        each of "Requested behavior", "Regressions checked", and "Edge cases considered" contains a
+        specific, checkable claim (per base-agent.md: "Each of these three fields must contain a
+        specific, checkable claim"). A field fails this check if it is empty, OR if it is one of
+        base-agent.md's illustrative forbidden examples (e.g. "N/A", "none", "looks good", "no
+        issues", "done", "completed", "works fine", "-", "TBD"), OR if it is some other generic/
+        reflexive phrase not on that list but equally unspecific (e.g. "seems fine", "nothing
+        major", "all good") -- the enumerated list is examples of the failure mode, not an
+        exhaustive list of every phrase to reject
+
+  on_result:
+    pass: proceed to Step 1 (acceptance criteria validation runs as normal)
+    fail: >
+      set overall_status = FAIL immediately, do NOT examine acceptance criteria this pass -- report
+      as a single self_review_gate violation (see Output Format) so the implementer can fix the
+      report and re-run
+
+  skip_when: "never -- this gate cannot be skipped; a missing implementation_summary is itself a fail (category: missing_self_review)"
+```
+
+**This is a mechanical presence/non-triviality check, not a judgment of implementation quality.** Do not evaluate whether the implementer's reasoning is *correct* — only whether it is present and specific. Correctness of the underlying work is still Step 1-3's job.
+
 ### Step 1: Load Acceptance Criteria
 
 ```yaml
@@ -149,6 +183,7 @@ validation:
 ## Validation Rules
 
 ### Strict Requirements
+- The Self-Review Report Gate (Step 0) is a precondition -- never evaluate acceptance criteria if it fails
 - Acceptance criteria are binary: 100% met or FAIL
 - Never accept "close enough" or "mostly works"
 - Never skip any criterion
@@ -168,6 +203,30 @@ validation:
 - Implementation differs from requirement
 
 ## Output Format
+
+### FAIL (Self-Review Report Gate)
+
+Returned immediately when Step 0 fails, before any acceptance criterion is examined:
+
+```yaml
+validation_result:
+  task_id: TASK-005
+  status: FAIL
+  timestamp: "2025-01-30T10:00:00Z"
+
+  self_review_gate:
+    status: FAIL
+    category: missing_self_review | trivial_self_review
+    issue: "[TASK-XXX-COMPLETION] block not found in implementation_summary"
+    # or: "Regressions checked field contains boilerplate: 'looks good'"
+    action: "Re-run the implementation agent's completion step to emit a specific, non-boilerplate [TASK-XXX-COMPLETION] report per agents/templates/base-agent.md's SELF-REVIEW REQUIREMENT, then re-validate."
+
+  criteria: []  # not evaluated -- self-review gate failed first
+
+  recommendation: |
+    Implementer must emit a valid, non-trivial self-review report before
+    acceptance criteria can be validated.
+```
 
 ### PASS
 
@@ -289,6 +348,8 @@ requirements_validation:
     - prd_requirements
 
   fail_on:
+    - missing_self_review
+    - trivial_self_review
     - missing_implementation
     - partial_implementation
     - placeholder_code
@@ -297,6 +358,7 @@ requirements_validation:
 
 ## See Also
 
+- `templates:base-agent` - Defines the `[TASK-XXX-COMPLETION]` self-review report format checked in Step 0
 - `orchestration:task-loop` - Calls this during task execution
-- `orchestration:quality-gate-enforcer` - Handles quality verification
+- `orchestration:quality-gate-enforcer` - Handles quality verification; runs its own Self-Review Report Gate independently
 - `quality:runtime-verifier` - Handles runtime verification

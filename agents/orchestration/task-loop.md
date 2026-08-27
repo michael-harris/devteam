@@ -302,7 +302,7 @@ Task({
 Task({
   subagent_type: "orchestration:quality-gate-enforcer",
   model: "opus",
-  prompt: "... task_id, changed_files, project_root ..."
+  prompt: "... task_id, changed_files, project_root, implementation_summary (the implementation agent's final output, including its [TASK-XXX-COMPLETION] self-review report, for the Self-Review Report Gate) ..."
 })
 ```
 
