@@ -254,6 +254,27 @@ log_agent_started() {
     esc_task_id=$(sql_escape "$task_id")
     esc_invoked_by_agent=$(sql_escape "$invoked_by_agent")
 
+    # agent_runs.task_id REFERENCES tasks(id) -- but nothing in this codebase
+    # ever inserts a row into `tasks` (task state is tracked via the kv-state
+    # store, e.g. `task.TASK-XXX.status`, not the relational `tasks` table).
+    # Under `PRAGMA foreign_keys = ON` (which sql_exec always sets), that made
+    # EVERY task-scoped agent_runs insert silently fail its FK constraint --
+    # confirmed empirically: a real sprint/task-loop run produced zero
+    # agent_runs rows with a non-NULL task_id, only the task_id-less
+    # sprint-level rows ever succeeded. That silently broke all per-task cost
+    # and call-hierarchy attribution (the exact thing orchestration:task-loop
+    # and orchestration:sprint-orchestrator populate `invoked_by_*` for, and
+    # what orchestration:execution-ledger, Phase 6, depends on to answer "what
+    # ran under TASK-XXX"). Fix: ensure a minimal placeholder `tasks` row
+    # exists before referencing task_id -- the table already has the right
+    # shape (schema.sql), it was just never populated. INSERT OR IGNORE is
+    # idempotent and never overwrites a fuller row a future planning-pipeline
+    # write might add for this id.
+    if [ -n "$task_id" ]; then
+        local task_insert_query="INSERT OR IGNORE INTO tasks (id, name, status) VALUES ('$esc_task_id', '$esc_task_id', 'in_progress');"
+        sql_exec "$task_insert_query" > /dev/null || log_warn "Failed to ensure tasks row for task_id=$task_id" "events"
+    fi
+
     # INSERT + last_insert_rowid() must run in the same sqlite3 invocation
     # (same connection) for last_insert_rowid() to reflect this row.
     local query="INSERT INTO agent_runs (session_id, agent, model, task_id, iteration, status, invoked_by_agent, invoked_by_run_id)

@@ -239,3 +239,4 @@ Creates: `logs/devteam-2026-01-29T104500.log`
 
 - `/devteam:status` - System status and metrics
 - `/devteam:status --history` - Session history
+- `devteam-reports/` - A browsable, per-task/per-sprint alternative to querying logs ad hoc: `devteam-reports/tasks/TASK-XXX.md` and `devteam-reports/sprints/SPRINT-XXX.md`, rendered automatically by `orchestration:execution-ledger` as tasks and sprints complete. Use this when you want "what happened on TASK-014" as a standing document rather than a query; use `/devteam:logs` for live, ad hoc filtering.

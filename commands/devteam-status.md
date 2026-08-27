@@ -358,3 +358,4 @@ SELECT * FROM v_gate_pass_rates;
 - `/devteam:list` - List plans and tasks
 - `/devteam:reset` - Reset stuck state
 - `/devteam:implement` - Start implementation
+- `devteam-reports/` - A browsable, per-task/per-sprint alternative to these live queries: `devteam-reports/INDEX.md` is a running dashboard, with `devteam-reports/tasks/TASK-XXX.md` and `devteam-reports/sprints/SPRINT-XXX.md` per-item detail, rendered automatically by `orchestration:execution-ledger` as tasks and sprints complete. Complements this command rather than replacing it: `/devteam:status` is for the current/live session, `devteam-reports/` is the kept historical record.

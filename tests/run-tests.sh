@@ -245,13 +245,35 @@ test_call_hierarchy() {
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 
-    # A logging failure (e.g. FK violation from a task_id not yet in `tasks`)
-    # must degrade gracefully -- never abort the caller. This mirrors a
-    # latent, pre-existing case: test_event_logging below passes task_id
-    # "task-1", which does not exist in the `tasks` table.
-    local failed_run_id
-    failed_run_id=$(log_agent_started "test-agent" "sonnet" "nonexistent-task-id")
-    assert_empty "$failed_run_id" "log_agent_started should return empty (not error) when the insert fails"
+    # Phase 6 fix: agent_runs.task_id REFERENCES tasks(id), but nothing in
+    # this codebase ever inserted a row into `tasks` (task state lives in the
+    # kv-state store instead) -- so every task-scoped agent_runs insert used
+    # to silently fail this FK constraint. log_agent_started now auto-creates
+    # a minimal placeholder `tasks` row for any non-empty task_id it's given,
+    # confirmed empirically against a real sprint/task-loop simulation before
+    # this fix (zero agent_runs rows ever carried a task_id). This must now
+    # succeed, and the placeholder row must actually exist.
+    local previously_failing_run_id
+    previously_failing_run_id=$(log_agent_started "test-agent" "sonnet" "a-task-id-with-no-prior-tasks-row")
+    assert_not_empty "$previously_failing_run_id" "log_agent_started should succeed for a task_id with no pre-existing tasks row (auto-creates one)"
+
+    local created_task_status
+    created_task_status=$(sqlite3 "$DB_FILE" "SELECT status FROM tasks WHERE id='a-task-id-with-no-prior-tasks-row';")
+    assert_equals "in_progress" "$created_task_status" "log_agent_started should have auto-created a placeholder tasks row"
+
+    local recorded_task_id
+    recorded_task_id=$(sqlite3 "$DB_FILE" "SELECT task_id FROM agent_runs WHERE id=$previously_failing_run_id;")
+    assert_equals "a-task-id-with-no-prior-tasks-row" "$recorded_task_id" "agent_runs row should carry the task_id now that the FK reference resolves"
+
+    # The graceful-degradation contract itself (never abort the caller on a
+    # genuine logging failure) is still real -- exercise it with an
+    # unreachable DB rather than the now-fixed FK case above.
+    local original_db_file="$DB_FILE"
+    DB_FILE="/nonexistent-devteam-test-path/does-not-exist.db"
+    local truly_failed_run_id
+    truly_failed_run_id=$(log_agent_started "test-agent" "sonnet" "" 2>/dev/null)
+    assert_empty "$truly_failed_run_id" "log_agent_started should return empty (not error) when the DB is unreachable"
+    DB_FILE="$original_db_file"
 
     teardown_test_db
 }

@@ -522,7 +522,7 @@ skills/                      # 20 skill definitions (SKILL.md per directory)
 └── rules/                   # 11 path-specific rule files
     └── *.md
 
-agent-registry.json          # Agent and command registry (125 agents, 20 commands)
+agent-registry.json          # Agent and command registry (126 agents, 20 commands)
 settings.json                # Plugin default settings
 .mcp.json                    # Bundled MCP server configs (GitHub, Memory)
 .lsp.json                    # Language server configs (8 languages)
