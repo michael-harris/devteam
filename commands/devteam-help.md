@@ -110,7 +110,7 @@ Get Help on Specific Topics
   /devteam:help task-loop    Quality loop details
   /devteam:help troubleshooting  Problem solving
 
-Documentation: https://github.com/michael-harris/devteam
+Documentation: https://github.com/Winnie-Bodhrik/devteam
 ```
 
 **Command Help:**
@@ -266,7 +266,7 @@ Getting Help
 ───────────────────────────────────────────────────────────────
   Logs:   /devteam:logs --level error
   Status: /devteam:status --all
-  GitHub: https://github.com/michael-harris/devteam/issues
+  GitHub: https://github.com/Winnie-Bodhrik/devteam/issues
 ```
 
 ## See Also

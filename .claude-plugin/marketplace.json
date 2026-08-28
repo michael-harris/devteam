@@ -2,8 +2,8 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "devteam-marketplace",
   "owner": {
-    "name": "michael-harris",
-    "email": "michael-harris@users.noreply.github.com"
+    "name": "Winnie-Bodhrik",
+    "email": "Manaswini.N@bodhrik.com"
   },
   "metadata": {
     "description": "Marketplace for the DevTeam plugin",
@@ -16,12 +16,12 @@
       "version": "4.0.0",
       "source": "./",
       "author": {
-        "name": "Multi-Agent Development Team",
-        "email": "michael-harris@users.noreply.github.com"
+        "name": "Winnie-Bodhrik",
+        "email": "Manaswini.N@bodhrik.com"
       },
       "category": "development",
       "tags": ["development", "automation", "multi-agent", "orchestration", "quality-gates", "testing", "security", "autonomous"],
-      "repository": "https://github.com/michael-harris/devteam",
+      "repository": "https://github.com/Winnie-Bodhrik/devteam",
       "license": "MIT"
     }
   ]

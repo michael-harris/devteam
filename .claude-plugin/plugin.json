@@ -3,10 +3,11 @@
   "description": "125-agent automated development system with Agent Teams, quality gates, Bug Council diagnostics, and autonomous execution",
   "version": "4.0.0",
   "author": {
-    "name": "Multi-Agent Development Team"
+    "name": "Winnie-Bodhrik",
+    "email": "Manaswini.N@bodhrik.com"
   },
-  "homepage": "https://github.com/michael-harris/devteam",
-  "repository": "https://github.com/michael-harris/devteam",
+  "homepage": "https://github.com/Winnie-Bodhrik/devteam",
+  "repository": "https://github.com/Winnie-Bodhrik/devteam",
   "license": "MIT",
   "keywords": ["development", "automation", "multi-agent", "orchestration", "quality-gates", "autonomous"]
 }

@@ -1,843 +1,460 @@
-# DevTeam: Multi-Agent Autonomous Development System
+# DevTeam: A Whole Software Team, Made of AI Agents
 
-A Claude Code plugin providing **125 specialized AI agents** with:
-- **Interview-driven planning** - Clarify requirements before work begins
-- **Codebase research** - Investigate patterns and blockers before implementation
-- **SQLite state management** - Reliable session tracking and cost analytics
-- **Model escalation** - Automatic haiku → sonnet → opus progression
-- **Bug Council** - 5-agent diagnostic team for complex issues
-- **Eco mode** - Cost-optimized execution mode for simpler tasks
-- **Quality gates** - Tests, types, lint, security, coverage enforcement
+DevTeam is a plugin for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that turns Claude into an entire software development team — not one assistant, but **126 specialized AI "employees,"** each with a written job description, working together to plan, build, test, and ship software.
+
+You don't need to know anything about AI to understand this document. Read on.
 
 ---
 
-## How This Works
+## 1. The Simplest Explanation
 
-This is a **Claude Code plugin** composed of:
-- **Markdown agent instructions** (`agents/*.md`) — Claude Code reads these and follows them as subagent prompts via the Task tool
-- **YAML configuration** (`.devteam/*.yaml`) — defines capabilities, thresholds, and agent selection triggers
-- **Shell scripts** (`scripts/*.sh`, `hooks/*.sh`) — handle state persistence (SQLite), event logging, hook lifecycle, and database management
-- **Slash commands** (`commands/*.md`, `skills/*/SKILL.md`) — user-facing commands that orchestrate agent workflows
+Imagine a mid-size tech company's engineering department. It's not one person doing everything — it's:
 
-There is no separate executable orchestrator. **Claude Code itself is the runtime** — it reads the agent markdown files, selects appropriate agents based on task characteristics, and executes them as subagents. The shell scripts provide supporting infrastructure (database, hooks, state tracking) but the orchestration logic lives in the agent instructions themselves.
+- A **Product Manager** who turns a rough idea into a written spec
+- **Engineers** split by specialty (backend, frontend, mobile, database...)
+- **QA/Testers** who won't sign off until things actually work
+- A **Security team** that audits before release
+- **Code reviewers** who check every pull request
+- An **Engineering Manager** who assigns work, tracks progress, and won't let anyone quietly abandon a task
+- A **war room** ("Bug Council") that gets called in when a bug is nasty enough that one person can't crack it alone
 
----
+**DevTeam is that department, except every "employee" is an AI agent, and the "employee handbook" for each one is a Markdown (`.md`) text file that tells it exactly what its job is, what it's allowed to touch, and how to do the work.**
 
-## Key Features
-
-### Autonomous Development with Task Loop
-
-**Task Loop** is the iterative quality enforcement system that ensures every task is completed to specification:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       TASK LOOP                              │
-│                                                              │
-│   Execute → Quality Gates → Pass? → Complete                 │
-│      ↑           │                                           │
-│      │          Fail                                         │
-│      │           ↓                                           │
-│      └─── Fix Tasks ← Model Escalation (if needed)          │
-│                                                              │
-│   Loop until: ALL QUALITY GATES PASS                        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Features:**
-- Automatic model escalation (haiku → sonnet → opus) after failures
-- Stuck loop detection with Bug Council activation
-- Quality gates: tests, types, lint, security, coverage
-- Anti-abandonment system prevents agents from giving up
-- Maximum 10 iterations with human notification
-
-### Intelligent Agent Selection
-
-The `/devteam:implement` command automatically selects the best agents for your task:
-
-```bash
-/devteam:implement "Add user authentication with JWT tokens"
-```
-
-The `/devteam:implement` command analyzes your task description, file types involved, and project context to select appropriate agents. It considers keyword matches, file extensions, task type (feature vs. bug), and detected language/framework.
-
-### Bug Council: Multi-Perspective Debugging
-
-For complex bugs, the Bug Council convenes 5 specialized analysts:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       BUG COUNCIL                            │
-├─────────────────────────────────────────────────────────────┤
-│  Root Cause Analyst    │ Error analysis, stack traces       │
-│  Code Archaeologist    │ Git history, regression detection  │
-│  Pattern Matcher       │ Similar bugs, anti-patterns        │
-│  Systems Thinker       │ Dependencies, integration issues   │
-│  Adversarial Tester    │ Edge cases, security vectors       │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-                    Synthesized Solution
-```
-
-**Activation Triggers:**
-- Critical/high severity bugs
-- 3+ failed opus attempts
-- Complexity score ≥ 10
-- Explicit `bug_council: true` flag
-
-### Scope Enforcement
-
-Agents are strictly confined to their assigned scope:
-
-```yaml
-scope:
-  allowed_files:
-    - "src/auth/*.py"
-  forbidden_directories:
-    - "src/billing/"
-  max_files_changed: 5
-```
-
-**6 Enforcement Layers:**
-1. Task scope definition in YAML
-2. Agent prompt constraints
-3. Scope validator agent with VETO power
-4. Pre-commit hook blocking
-5. Runtime file access control
-6. Out-of-scope observations logging
-
-### Anti-Abandonment System
-
-Agents cannot give up. The persistence system ensures completion:
-
-```
-Abandonment Attempt → Detected → Re-engagement Prompt
-         ↓
-    Still stuck?
-         ↓
-    Model Escalation (haiku → sonnet → opus)
-         ↓
-    Still stuck?
-         ↓
-    Bug Council Activation
-         ↓
-    Still stuck?
-         ↓
-    Human Notification (but keep trying)
-```
+There is no separate program running behind the scenes pulling the strings. **Claude Code itself is the manager** — it reads these job-description files, decides who's needed for a given task, and has them do the work, one after another or in parallel, the same way a manager reads résumés and assigns tickets.
 
 ---
 
-## 125 Specialized Agents
+## 2. What DevTeam Actually Is (Facts, Not Marketing)
 
-### Enterprise Roles
-
-| Category | Agents | Capabilities |
-|----------|--------|--------------|
-| **SRE** | Site Reliability Engineer | SLOs, incident response, chaos engineering |
-| **SRE** | Platform Engineer | Internal developer platforms, golden paths |
-| **SRE** | Observability Engineer | Metrics, logging, tracing, alerting |
-| **Security** | Penetration Tester | OWASP testing, API security, vuln assessment |
-| **Security** | Compliance Engineer | SOC2, HIPAA, GDPR, PCI-DSS |
-| **Product** | Product Manager | PRDs, roadmaps, user research |
-| **Quality** | Accessibility Specialist | WCAG 2.1, screen readers, inclusive design |
-| **DevRel** | Developer Advocate | Technical content, community, DX |
-
-### Orchestration Agents
-
-| Agent | Purpose |
-|-------|---------|
-| **Bug Council Orchestrator** | Multi-perspective bug analysis |
-| **Code Review Coordinator** | Cross-agent code review orchestration |
-| **Quality Gate Enforcer** | Run and aggregate quality gate results |
-| **Requirements Validator** | Validate acceptance criteria met |
-| **Scope Validator** | Enforce scope boundaries |
-| **Sprint Orchestrator** | Sprint execution management, task sequencing, and sprint-level validation (integration/security/performance/requirements/docs/code review/workflow compliance) after all tasks complete; runs in `mode: normal` (single invocation) or `mode: autonomous` (loops across sprints via the Stop hook until the plan is done) |
-| **Task Loop** | Iterative quality loop for single task execution |
-| **Track Merger** | Merge parallel worktree tracks |
-| **Workflow Compliance** | Meta-validator auditing orchestration process |
-
-### Bug Council Agents
-
-| Agent | Specialty |
-|-------|-----------|
-| **Root Cause Analyst** | Error analysis, hypothesis generation |
-| **Code Archaeologist** | Git history, regression detection |
-| **Pattern Matcher** | Similar bugs, anti-pattern identification |
-| **Systems Thinker** | Dependencies, architectural issues |
-| **Adversarial Tester** | Edge cases, security vulnerabilities |
-
-### Implementation Agents
-
-**Backend (by language):**
-- Python (FastAPI, Django, Flask)
-- TypeScript (Express, NestJS, Fastify)
-- Go (Gin, Echo, Fiber)
-- Java (Spring Boot, Micronaut)
-- C# (ASP.NET Core)
-- Ruby (Rails, Sinatra)
-- PHP (Laravel, Symfony)
-
-**Frontend:**
-- React, Vue, Svelte, Angular specialists
-- Accessibility specialist
-- Performance auditor
-
-**Database:**
-- Schema designers
-- Query optimization specialists
-- Migration specialists
-
-**DevOps:**
-- CI/CD Specialist (GitHub Actions, Jenkins, GitLab CI)
-- Docker Specialist
-- Kubernetes Specialist
-- Terraform Specialist
-
-### Quality Agents
-
-| Agent | Focus |
-|-------|-------|
-| **Test Writer** | Unit, integration, e2e tests |
-| **Security Auditor** | OWASP Top 10, vulnerability scanning |
-| **Performance Auditor** | Profiling, optimization, load testing |
-| **Accessibility Specialist** | WCAG compliance, inclusive design |
-| **E2E Tester** | Playwright, Cypress, browser testing |
+- It is a **Claude Code plugin** — a folder of files that Claude Code loads and follows. It is not a separate app, server, or website.
+- It ships **126 agent files** (`agents/**/*.md`), each one a job description for one kind of specialist (e.g. "Python backend developer," "security auditor," "accessibility specialist").
+- It ships **20 slash commands** (`/devteam:plan`, `/devteam:implement`, `/devteam:bug`, etc.) that a human types to kick off work.
+- It keeps track of everything — sessions, costs, which agent did what, pass/fail results — in a local **SQLite database** (`.devteam/devteam.db`) that lives inside your own project.
+- It uses **hooks** (small scripts that run automatically at certain moments, like "when a session starts" or "when someone tries to stop early") to enforce its own rules without a human having to police it.
+- **Everything runs on your machine, inside your own project.** Nothing is uploaded anywhere except the normal calls Claude Code already makes to run the AI model.
 
 ---
 
-## Quick Start
+## 3. The Complete Workflow — Every Step and Every Agent, by Name
 
-### Planning + Implementation (Recommended)
+This section is not a simplified summary — every agent name below is a literal `subagent_type` dispatched via a real `Task()` call in this repository's own command/agent files (`commands/*.md`, `skills/*/SKILL.md`, `agents/orchestration/*.md`). Nothing here is inferred or assumed; you can grep for `subagent_type:` in this repo and find every one of these calls yourself.
 
-```bash
-# Plan a new feature (interview → research → PRD → tasks → sprints)
-/devteam:plan --feature "Add user authentication with OAuth"
+### 3.1 Planning — `/devteam:plan`
 
-# Execute the plan
+```
+/devteam:plan
+    │
+    ▼
+Phase 0: Git repo check           (main session — no agent; requires a git repo to exist)
+    │
+    ▼
+Phase 1: INTERVIEW                (main session — no agent; asks you questions one at a time;
+    │                              skipped only with --skip-interview)
+    ▼
+Phase 2: RESEARCH        ───►  Task( research:research-agent, model: opus )
+    │                          reads your actual codebase, evaluates tech choices, finds blockers
+    ▼
+Phase 3: Follow-up questions      (main session, based on what research found)
+    │
+    ▼
+Phase 4: PRD GENERATED   ───►  Task( planning:prd-generator, model: sonnet )
+    │                          writes docs/planning/PROJECT_PRD.json + .devteam/features.json
+    ▼
+Phase 5: TASKS            ───►  Task( planning:task-graph-analyzer, model: sonnet )
+    │                          writes docs/planning/tasks/TASK-XXX.json (one per task),
+    │                          assigns each task's suggested_agent, and — if a task is
+    │                          frontend/fullstack — makes it depend on a "design" task
+    ▼
+Phase 6: SPRINTS          ───►  Task( planning:sprint-planner, model: sonnet )
+    │                          writes docs/sprints/SPRINT-XXX.json, groups tasks into sprints/
+    │                          tracks, and initializes sprint/track state in .devteam/devteam.db
+    ▼
+Phase 7: .devteam/devteam.db      (main session writes final project metadata via state.sh;
+                                    marks phase "planning_complete")
+```
+
+### 3.2 Implementation — `/devteam:implement`
+
+```
 /devteam:implement
-
-# Or execute specific sprint
-/devteam:implement --sprint 1
+    │
+    ▼
+Phase 0: New row created in .devteam/devteam.db's `sessions` table
+    │
+    ▼
+Phase 1: Target decided — a single --task, a --sprint, --all sprints, the active plan, or an ad-hoc description
+    │
+    ▼
+Phase 2: INTERVIEW for ad-hoc tasks only   (main session — only if the description is ambiguous)
+    │
+    ▼
+Phase 3: WHICH AGENT IMPLEMENTS IT?
+    │    • Task from a plan  → suggested_agent was already decided back in Phase 5 of planning,
+    │                          by planning:task-graph-analyzer (e.g. backend:api-developer-python,
+    │                          frontend:developer, database:developer-typescript — whichever
+    │                          matches that task's language/type; full roster in §9)
+    │    • Ad-hoc task       → resolved right now, in this order, first match wins:
+    │                          1. your explicit --type flag (e.g. --type security)
+    │                          2. a keyword match, e.g. "security" → quality:security-auditor,
+    │                             "refactor" → quality:refactoring-coordinator,
+    │                             "bug"/"fix" → diagnosis:root-cause-analyst
+    │                          3. otherwise, inferred from file types/language, same as a planned task
+    ▼
+Phase 4: Starting AI model tier picked by task complexity score (see §12) — haiku / sonnet / opus
+    │
+    ▼
+Phase 5: EXECUTE — routed to exactly one of:
+    │    • single task/ad-hoc  → Task( orchestration:task-loop, model: opus )         → see §3.3
+    │    • sprint / --all / plan → Task( orchestration:sprint-orchestrator, model: opus ) → see §3.4
 ```
 
-The system will:
-1. **Interview** - Clarify requirements with targeted questions
-2. **Research** - Analyze codebase, identify patterns and blockers
-3. **Plan** - Generate PRD, tasks, and sprints
-4. **Execute** - Run with Task Loop quality loop and model escalation
-5. **Verify** - Pass all quality gates before completion
+### 3.3 Inside the Task Loop — runs once for every single task
 
-### Bug Fixing
+`orchestration:task-loop` is dispatched either directly by `/devteam:implement` (a single task) or once per task by `orchestration:sprint-orchestrator` (inside a sprint). Either way, the sequence it runs is identical:
 
-```bash
-# Fix a local bug (interview → diagnose → fix → verify)
-/devteam:bug "Login fails for guest users"
+| Step | Agent dispatched | Model | What it checks / does |
+|---|---|---|---|
+| 1. Implementation | `{suggested_agent}` from Phase 3 above | starts at complexity-based tier, escalates one tier after 2 consecutive failures | Writes the actual code; must emit a `[TASK-XXX-COMPLETION]` self-review before finishing |
+| 1.5 Scope Validation | `orchestration:scope-validator` | haiku | Has **veto power** — checks the git diff against the task's allowed/forbidden file list; on fail, out-of-scope files are reverted and the implementer re-runs before anything else proceeds |
+| 2. Quality Gates | `orchestration:quality-gate-enforcer` | opus | Runs tests, type-checking, lint, security scan, and checks the self-review from Step 1 was real, not generic |
+| 3. Requirements Validation | `orchestration:requirements-validator` | opus | Checks the task's actual acceptance criteria were met, not just "tests pass" |
+| 3.5 Workflow Compliance | `orchestration:workflow-compliance` | opus | Only runs once Steps 2 and 3 both PASS — verifies every required agent above was actually called with real evidence, and no step was shortcut or faked |
+| 4. Execution Ledger | `orchestration:execution-ledger` | haiku | Runs once the task reaches a final state (done or failed); writes `devteam-reports/tasks/TASK-XXX.md`. Best-effort only — never blocks or changes the task's real pass/fail result |
 
-# Fix a GitHub issue
-/devteam:issue 123
+**If Step 2, 3, or 3.5 fails:** the failure count goes up, a fix context is built from the failure, and Step 1 runs again — up to **10 iterations**, escalating the AI model tier (haiku→sonnet→opus) after every 2 consecutive failures at the current tier.
 
-# Force Bug Council for complex issues
-/devteam:bug "Memory leak in image processor" --council
+**If the top-tier (opus) model fails 3 times in a row, or the loop is stuck:** `orchestration:bug-council-orchestrator` (opus) is dispatched, which runs all 5 diagnosis agents **in parallel, all at opus**: `diagnosis:root-cause-analyst`, `diagnosis:code-archaeologist`, `diagnosis:pattern-matcher`, `diagnosis:systems-thinker`, `diagnosis:adversarial-tester`. Their combined diagnosis names a `recommended_fix.suggested_agent`, which then runs a brand-new implementation attempt at opus — going through Steps 1.5, 2, 3, and 3.5 again in full; nothing is skipped just because the Bug Council was involved.
+
+### 3.4 Sprint-Level Validation — runs once, after every task in a sprint is done
+
+`orchestration:sprint-orchestrator` dispatches `orchestration:task-loop` once per task in the sprint (§3.3, in dependency order, parallelizing tasks that don't depend on each other). Once **every** task in the sprint has reached a final state, it runs 8 sprint-wide sub-checks, in this exact order, before the sprint can close:
+
+| Step | Agent dispatched | Model |
+|---|---|---|
+| 4.1 Integration | `quality:runtime-verifier` | sonnet |
+| 4.2 Security | `quality:security-auditor` (+ the matching `security:security-auditor-{language}`) | opus |
+| 4.3 Hybrid testing *(only if the sprint touched frontend files)* | `quality:e2e-tester`, then `quality:visual-verification` | sonnet, opus |
+| 4.4 Performance | `quality:performance-auditor-{language}` | sonnet |
+| 4.5 Requirements (sprint-wide) | `orchestration:requirements-validator` | opus |
+| 4.6 Documentation | `quality:documentation-coordinator` | haiku |
+| 4.7 Code review | `orchestration:code-review-coordinator` | opus |
+| 4.8 Workflow compliance | `orchestration:workflow-compliance` | opus |
+
+If any sub-check fails, a fix task is created and sent back through `orchestration:task-loop` (§3.3), then that specific sub-check is re-run — the sprint does not close until all 8 pass. Once they do, `orchestration:execution-ledger` (haiku) renders `devteam-reports/sprints/SPRINT-XXX.md`.
+
+### 3.5 The One-Line Version
+
+```
+/devteam:plan → interview → research-agent → prd-generator → task-graph-analyzer → sprint-planner
+    → .devteam/devteam.db (plan + sprint state saved)
+    → /devteam:implement → agent selection ({suggested_agent}) → task-loop
+        → implementer → scope-validator → quality-gate-enforcer → requirements-validator
+        → workflow-compliance → execution-ledger
+    → (once every task in the sprint is done) → sprint-orchestrator's 8-step sprint validation
+        → execution-ledger → devteam-reports/
 ```
 
-### Cost-Optimized Mode
+**Every single arrow above writes to `.devteam/devteam.db`** — every agent dispatch, pass, fail, and retry is logged there the moment it happens (`scripts/events.sh`'s `log_agent_started`/`log_agent_completed`/`log_agent_failed`), which is what `/devteam:status` reads from and what `execution-ledger` turns into the reports in `devteam-reports/`.
 
-```bash
-# Use eco mode (lower-cost models for simpler tasks)
-/devteam:implement --eco
-/devteam:bug "Minor CSS issue" --eco
+---
+
+## 4. The Quality Loop ("Task Loop") — Explained Like a Performance Review
+
+Real engineering teams don't accept work on the first draft. DevTeam enforces the same discipline mechanically:
+
+```
+Do the work  →  Run the checks (tests, types, lint, security)
+    ↑                        │
+    │                     Failed?
+    │                        ↓
+    └──── Try again, with a smarter/more careful model if it keeps failing
 ```
 
-### Monitoring
+- If the same AI model fails a task **twice in a row**, DevTeam automatically "promotes" the work to a more capable model — the equivalent of handing a stuck ticket to a senior engineer instead of a junior one.
+- The tiers, cheapest to most capable, are **Haiku → Sonnet → Opus**. Simple tasks (typo fixes, docs) stay on the cheap tier; complex or security-sensitive work is *always* sent straight to the top tier.
+- There's a hard cap of **10 attempts** per task. If it's still failing after that, a human gets notified — but the agents keep trying rather than silently giving up (see the anti-abandonment system below).
+- A task cannot be marked "complete" unless it passes **every** required check: tests, type-checking, lint, security, and staying within its assigned scope of files.
+
+---
+
+## 5. When a Bug Is Too Hard for One Agent: The "Bug Council"
+
+For everyday bugs, one specialist agent handles it. But for a genuinely hard bug — the kind where one engineer keeps guessing wrong — real teams pull people into a room together. DevTeam's version is the **Bug Council**: five specialist agents look at the *same* bug from five different angles at once, then a synthesized fix is produced from all five perspectives.
+
+| Council Member | What they look for (real-world equivalent) |
+|---|---|
+| **Root Cause Analyst** | Reads the error/stack trace like a debugger would |
+| **Code Archaeologist** | Checks git history — "did a recent change cause this?" |
+| **Pattern Matcher** | "Have we seen this exact bug shape somewhere else in the codebase?" |
+| **Systems Thinker** | Looks at how components/services depend on each other |
+| **Adversarial Tester** | Tries to break it — edge cases, malicious input, security angles |
+
+**The Council is automatically called in when:** the bug is marked critical/high severity, the top-tier AI model has already failed 3+ times, the task is unusually complex, or a human explicitly asks for it (`--council`).
+
+---
+
+## 6. Guardrails: Keeping Agents Honest
+
+A real company doesn't let a new hire touch the production database or the billing system on day one. DevTeam enforces the same kind of boundaries automatically, in **six layers** so that no single failure lets an agent go off-script:
+
+1. Every task is given a written **scope** — an explicit allow-list of files/folders it may touch, a forbidden list, and a max number of files it may change.
+2. That scope is baked directly into the instructions the agent receives.
+3. A dedicated **Scope Validator** agent has **veto power** — it can reject a change even if the work is otherwise correct.
+4. A pre-commit hook physically blocks a commit that touches forbidden files.
+5. Runtime file-access checks catch violations as they happen, not just at commit time.
+6. Anything an agent *noticed* was out of scope (but didn't touch) gets logged for a human to review later, instead of being silently ignored.
+
+**Anti-abandonment:** Agents are also not allowed to just say "this is too hard, I give up." That kind of language is detected and blocked; the agent is re-prompted to keep working, then escalated to a stronger model, then to the Bug Council, and only after all of that does a human get pinged — and even then, the system keeps trying rather than stopping.
+
+---
+
+## 7. The Paper Trail: Reports and Cost Tracking
+
+Every AI model call costs real money and takes real time — DevTeam treats that like a contractor's timesheet, not a mystery bill:
+
+- Every agent run is logged to the local SQLite database: which agent, which AI model tier, how long it took, tokens used, and cost.
+- A dedicated reporting agent (**Execution Ledger**) turns that raw data into readable Markdown reports under `devteam-reports/` — one file per task, one per sprint, plus a running `INDEX.md` dashboard. These reports are meant to be kept and reviewed later (they're checked into your project, unlike the raw database).
+- `/devteam:status` shows you system health, current progress, and cost at any time, from your terminal.
+
+---
+
+## 8. Keeping the Org Chart Honest: Agent-Wiring Governance
+
+One risk in a system this large: an agent's job description could exist on paper but never actually get assigned any work — like an employee who was hired, given a desk, and then forgotten. DevTeam has an automated check (`scripts/validate-agent-wiring.sh`, run in CI) that scans the entire repository and fails the build if any agent capable of delegating work to others has **zero real callers**. This isn't hypothetical: a live audit of this project using that exact check found and fixed a real orphaned agent (`quality:refactoring-coordinator`) that looked wired up in documentation but was never actually reachable — proof the check does real work, not just theater.
+
+---
+
+## 9. Meet the Team: What the 126 Agents Actually Cover
+
+Every category below maps to a real job function you'd find on an engineering org chart:
+
+| Category | Real-world equivalent | What they do here |
+|---|---|---|
+| **Orchestration** (10 agents) | Engineering managers, tech leads | Assign work, run the quality loop, enforce scope, merge parallel work, generate reports |
+| **Planning** (3 agents) | Product managers, program managers | Turn ideas into PRDs, tasks, and sprints |
+| **Research** (1 agent) | Tech lead doing discovery | Reads your codebase before anyone writes new code |
+| **Diagnosis / Bug Council** (5 agents) | Senior incident-response engineers | Multi-angle bug diagnosis (see §5) |
+| **Backend** (16 agents) | Backend engineers, one per language/stack | Python, TypeScript, Go, Java, C#, Ruby, PHP APIs |
+| **Frontend** (3 agents) | Frontend/UI engineers | React/Vue components, UI review |
+| **Database** (12 agents) | DBAs, data engineers | Schema design, migrations, query review (SQL + NoSQL) |
+| **Quality** (26 agents) | QA engineers, test engineers, SRE | Unit/integration/E2E tests, performance audits, security scans, accessibility, documentation |
+| **DevOps** (5 agents) | Platform/DevOps engineers | Docker, Kubernetes, CI/CD, Terraform, mobile CI/CD |
+| **Mobile** (8 agents) | iOS/Android engineers | Native iOS, Android, Flutter, React Native |
+| **Security** (10 agents) | Security engineers | Penetration testing, compliance (SOC2/HIPAA/GDPR/PCI-DSS), per-language security auditing |
+| **SRE** (2 agents) | Site reliability engineers | Incident response, observability, internal platform tooling |
+| **UX / Design** (12 agents) | Product designers | Design systems, typography, color, data visualization, drift detection |
+| **Accessibility** (2 agents) | Accessibility specialists | WCAG compliance, screen-reader support |
+| **Architecture** (1 agent) | Staff/principal engineer | High-level system design decisions |
+| **Data & AI** (2 agents) | Data/ML engineers | Data pipelines, ML model integration |
+| **Product** (1 agent) | Product manager | Requirements and stakeholder-style communication |
+| **DevRel** (1 agent) | Developer advocate | Docs and developer-facing content |
+| **Support / Infra / Scripting** (5 agents) | Tooling/support engineers | Dependency updates, configuration, shell/PowerShell scripting |
+
+*(Full breakdown by file: see [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md).)*
+
+---
+
+## 10. Working on Multiple Things at Once (Parallel Tracks)
+
+For a large plan, DevTeam can split work into independent **tracks** (e.g. "Track 1: Backend API," "Track 2: Frontend," "Track 3: Infrastructure") that run in isolated git **worktrees** — think of it as three engineers each working on their own branch/checkout of the repo at the same time, with a dedicated **Track Merger** agent responsible for combining everyone's work back together at the end, the way a lead engineer resolves merge conflicts when several people's branches land at once.
 
 ```bash
-# Check status, costs, progress
-/devteam:status
-
-# List plans and tasks
-/devteam:list
-
-# Reset stuck sessions
-/devteam:reset
+/devteam:plan "E-commerce platform" --tracks 3 --worktrees
+/devteam:implement --all       # runs all tracks, merges automatically when done
 ```
 
 ---
 
-## Configuration
+## 11. Quick Start
 
-### Task Loop Configuration (`.devteam/task-loop-config.yaml`)
-
-```yaml
-loop_settings:
-  max_iterations: 10
-
-model_escalation:
-  enabled: true
-  consecutive_failures:
-    haiku_to_sonnet: 2
-    sonnet_to_opus: 2
-    opus_max_failures: 3  # Then Bug Council
-
-quality_gates:
-  required:
-    tests_passing: true
-    type_check: true
-    lint: true
-  security:
-    on_finding: create_fix_task
-```
-
-### Scope Definition (per task)
-
-```yaml
-# In task definition
-scope:
-  allowed_files:
-    - "src/auth/*.py"
-  allowed_patterns:
-    - "tests/auth/**/*.py"
-  forbidden_directories:
-    - "src/billing/"
-    - "src/admin/"
-  max_files_changed: 10
-```
-
-### Agent Selection (`.devteam/agent-capabilities.yaml`)
-
-```yaml
-categories:
-  security:
-    agents:
-      - id: penetration_tester
-        triggers:
-          keywords: [pentest, security testing, vulnerability]
-          task_types: [security_testing]
-```
-
----
-
-## Hooks System
-
-The system uses Claude Code hooks for autonomous execution. **All hooks support both Linux/macOS (Bash) and Windows (PowerShell).**
-
-| Hook | Linux/macOS | Windows | Purpose |
-|------|-------------|---------|---------|
-| Stop Hook | `stop-hook.sh` | `stop-hook.ps1` | Blocks exit without `EXIT_SIGNAL: true` |
-| Persistence Hook | `persistence-hook.sh` | `persistence-hook.ps1` | Detects and prevents abandonment |
-| Scope Check | `scope-check.sh` | `scope-check.ps1` | Validates commits stay in scope |
-| Pre-Compact | `pre-compact.sh` | `pre-compact.ps1` | Preserves state before context compaction |
-| Pre-Tool-Use | `pre-tool-use-hook.sh` | `pre-tool-use-hook.ps1` | Pre-execution validation |
-| Post-Tool-Use | `post-tool-use-hook.sh` | `post-tool-use-hook.ps1` | Post-execution logging |
-| Session Start | `session-start.sh` | `session-start.ps1` | Session initialization |
-| Session End | `session-end.sh` | `session-end.ps1` | Session cleanup |
-| Install | `install.sh` | `install.ps1` | Hook installation script |
-
-When installed via the marketplace or as a plugin, all hooks are configured automatically through `hooks/hooks.json`. No manual settings.json editing is required.
-
-See [hooks/README.md](hooks/README.md) for hook details and troubleshooting.
-
----
-
-## Model Tiers & Cost Optimization
-
-### Automatic Model Selection
-
-| Complexity | Model | Characteristics | Use Case |
-|------------|-------|------------------|----------|
-| 1-4 | Haiku | Fast, lowest cost | Simple fixes, docs |
-| 5-8 | Sonnet | Balanced | Standard features |
-| 9-14 | Opus | Most capable, highest cost | Complex architecture |
-
-### Escalation Flow
-
-```
-Task starts at complexity-appropriate tier
-           │
-           ▼
-       Attempt #1
-           │
-       FAIL? ──────────────────┐
-           │                   │
-           ▼                   ▼
-       Attempt #2          Same tier
-           │              + more context
-       FAIL? ──────────────────┐
-           │                   │
-           ▼                   ▼
-       Attempt #3          Same tier
-           │              + alt approach
-       FAIL? ──────────────────┐
-           │                   │
-           ▼                   ▼
-       ESCALATE           Upgrade tier
-           │              (haiku→sonnet→opus)
-           ▼
-    Continue with higher tier
-```
-
----
-
-## Architecture
-
-### Complete Flow
-
-```
-User Request
-     │
-     ▼
-┌─────────────────┐
-│  /devteam:implement  │ ← Automatic agent selection
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Task Loop     │ ← Iterative quality loop per task
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   TASK LOOP     │ ← Quality loop wrapper
-│  ┌───────────┐  │
-│  │  Execute  │  │ ← Selected agents work
-│  │  Agents   │  │
-│  └─────┬─────┘  │
-│        │        │
-│        ▼        │
-│  ┌───────────┐  │
-│  │  Quality  │  │ ← Tests, lint, security
-│  │   Gates   │  │
-│  └─────┬─────┘  │
-│        │        │
-│    PASS│ FAIL   │
-│        │   │    │
-│        │   ▼    │
-│        │ ┌────┐ │
-│        │ │Fix │ │ ← Create fix tasks
-│        │ └──┬─┘ │
-│        │    │   │
-│        │    ▼   │
-│        │ Escalate? → Model upgrade if needed
-│        │    │   │
-│        └────┴───┘
-│             │
-└─────────────┘
-         │
-         ▼
-   EXIT_SIGNAL: true
-```
-
-### Directory Structure
-
-```
-.devteam/
-├── config.yaml              # Main project configuration
-├── task-loop-config.yaml    # Task Loop quality loop config
-├── agent-capabilities.yaml  # Agent registry with triggers
-├── agent-selection.md       # Selection algorithm docs
-├── persistence-config.yaml  # Anti-abandonment rules
-├── scope-enforcement.md     # Scope system docs
-├── model-selection.md       # Dynamic model assignment
-├── parallel-execution.md    # Concurrent task handling
-├── plan-management.md       # Plan lifecycle tracking
-├── sprint-loop-config.yaml  # Sprint-level validation settings (read by sprint-orchestrator.md, folded in from the deprecated sprint-loop agent)
-├── task-loop-config.yaml    # Task execution settings
-├── code-review-config.yaml  # Code review standards
-├── database-config.yaml     # Database setup
-├── frontend-config.yaml     # Frontend-specific settings
-├── performance-config.yaml  # Performance audit thresholds
-├── test-config.yaml         # Test framework configuration
-├── testing-config.yaml      # Test execution config
-├── ux-config.yaml           # UX validation rules
-├── validation-config.yaml   # Requirements validation rules
-├── refactoring-config.yaml  # Refactoring guidelines
-├── devteam.db               # SQLite execution state + circuit breaker tracking (runtime)
-└── plans/                   # Multi-plan storage (runtime)
-
-agents/
-├── orchestration/           # 9 orchestration agents (autonomous-controller.md and sprint-loop.md were deprecated to docs/deprecated/ -- folded into sprint-orchestrator.md)
-│   ├── bug-council-orchestrator.md
-│   ├── code-review-coordinator.md
-│   ├── quality-gate-enforcer.md
-│   ├── requirements-validator.md
-│   ├── scope-validator.md
-│   ├── sprint-orchestrator.md
-│   ├── task-loop.md
-│   ├── track-merger.md
-│   └── workflow-compliance.md
-├── planning/                # PRD & sprint planning (3)
-├── research/                # Codebase research (1)
-├── diagnosis/               # Bug Council agents (5)
-├── backend/                 # Backend API developers (16)
-├── frontend/                # Frontend developers (3)
-├── database/                # Database specialists (12)
-├── quality/                 # Testing & QA (26)
-├── devops/                  # CI/CD, Docker, K8s (5)
-├── mobile/                  # iOS, Android, Flutter, RN (8)
-├── security/                # Security & Compliance (10)
-├── sre/                     # Site Reliability Engineering (2)
-├── ux/                      # Design system agents (12)
-├── accessibility/           # A11y specialists (2)
-├── architecture/            # System architecture (1)
-├── data-ai/                 # Data & ML engineering (2)
-├── devrel/                  # Developer advocacy (1)
-├── product/                 # Product management (1)
-├── specialized/             # Observability (1)
-├── support/                 # Dependency management (1)
-├── infrastructure/          # Configuration management (1)
-├── python/                  # Python utilities (1)
-├── scripting/               # Shell & PowerShell (2)
-└── templates/
-    └── base-agent.md
-
-commands/                    # 20 slash commands
-├── devteam-plan.md
-├── devteam-implement.md
-├── devteam-bug.md
-├── devteam-issue.md
-├── devteam-issue-new.md
-├── devteam-status.md
-├── devteam-reset.md
-├── devteam-config.md
-├── devteam-logs.md
-├── devteam-help.md
-├── devteam-list.md
-├── devteam-select.md
-├── devteam-design.md
-├── devteam-design-drift.md
-├── devteam-review.md
-├── devteam-test.md
-├── merge-tracks.md
-├── worktree-status.md
-├── worktree-list.md
-└── worktree-cleanup.md
-
-skills/                      # 20 skill definitions (SKILL.md per directory)
-├── devteam-plan/
-├── devteam-implement/
-├── devteam-bug/
-├── ... (one directory per command)
-└── worktree-cleanup/
-
-.claude/
-└── rules/                   # 11 path-specific rule files
-    └── *.md
-
-agent-registry.json          # Agent and command registry (126 agents, 20 commands)
-settings.json                # Plugin default settings
-.mcp.json                    # Bundled MCP server configs (GitHub, Memory)
-.lsp.json                    # Language server configs (8 languages)
-
-hooks/                       # Cross-platform hooks
-├── stop-hook.sh / .ps1      # Exit control
-├── persistence-hook.sh / .ps1
-├── scope-check.sh / .ps1
-├── pre-compact.sh / .ps1
-├── pre-tool-use-hook.sh / .ps1
-├── post-tool-use-hook.sh / .ps1
-├── session-start.sh / .ps1
-├── session-end.sh / .ps1
-├── install.sh / .ps1
-├── lib/                     # Shared hook utilities
-├── tests/                   # Hook test suite
-└── README.md
-
-mcp-configs/                 # MCP server configurations
-├── required.json
-├── recommended.json
-├── optional.json
-├── lsp-servers.json
-└── README.md
-```
-
----
-
-## Commands Reference
-
-### Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `/devteam:plan` | Interactive planning with interview, research, and sprint generation |
-| `/devteam:implement` | Execute plans, sprints, tasks, or ad-hoc work |
-| `/devteam:bug "<desc>"` | Fix bugs with diagnostic workflow and Bug Council |
-| `/devteam:issue <#>` | Fix GitHub issues with interview if needed |
-| `/devteam:status` | Display system health, progress, and costs |
-| `/devteam:reset` | Reset stuck sessions and recover from errors |
-
-### Planning Options
+### Install
 
 ```bash
-/devteam:plan                      # Interactive planning
-/devteam:plan --feature "desc"     # Plan specific feature
-/devteam:plan --from spec.md       # Plan from spec file
-/devteam:plan --skip-research      # Skip research phase
-```
-
-### Implementation Options
-
-```bash
-/devteam:implement                 # Execute current plan
-/devteam:implement --sprint 1      # Execute specific sprint
-/devteam:implement --all           # Execute all sprints
-/devteam:implement --task TASK-001 # Execute specific task
-/devteam:implement "ad-hoc task"   # One-off task with interview
-/devteam:implement --eco           # Cost-optimized mode
-```
-
-### Bug Fixing Options
-
-```bash
-/devteam:bug "description"         # Fix with interview
-/devteam:bug "desc" --council      # Force Bug Council
-/devteam:bug "desc" --severity critical
-/devteam:bug "desc" --eco          # Cost-optimized
-```
-
-### Quality & Review Commands
-
-| Command | Description |
-|---------|-------------|
-| `/devteam:review` | Run cross-agent code review |
-| `/devteam:test` | Run test coordination and execution |
-| `/devteam:design` | Design system generation and validation |
-| `/devteam:design-drift` | Detect design system drift |
-
-### Management Commands
-
-| Command | Description |
-|---------|-------------|
-| `/devteam:list` | List plans, sprints, and tasks |
-| `/devteam:select <plan>` | Select active plan |
-| `/devteam:issue-new "<desc>"` | Create new GitHub issue |
-| `/devteam:config` | View and modify configuration |
-| `/devteam:logs` | View execution logs |
-| `/devteam:help` | Get help on any topic |
-
-### Worktree Commands
-
-| Command | Description |
-|---------|-------------|
-| `/devteam:worktree-status` | Show worktree status |
-| `/devteam:worktree-list` | List all worktrees |
-| `/devteam:worktree-cleanup` | Clean up worktrees |
-| `/devteam:merge-tracks` | Merge parallel tracks |
-
-See [commands/README.md](commands/README.md) for detailed documentation.
-
----
-
-## Quality Standards
-
-Every task must pass:
-
-| Gate | Requirement |
-|------|-------------|
-| **Tests** | 100% of tests passing |
-| **Types** | No type errors (mypy, tsc) |
-| **Lint** | No lint errors |
-| **Security** | No high/critical findings |
-| **Coverage** | ≥80% code coverage |
-| **Scope** | All changes within scope |
-
-**No task completes without all gates passing.**
-
----
-
-## Examples
-
-### Example 1: Add Feature
-
-```bash
-/devteam:implement "Add user profile page with avatar upload"
-```
-
-System automatically:
-1. Detects React frontend + FastAPI backend
-2. Selects: frontend_developer, api_developer_python, test_writer
-3. Creates scoped subtasks for each
-4. Executes with Task Loop
-5. Security audit on file upload
-6. Completes when all tests pass
-
-### Example 2: Fix Bug
-
-```bash
-/devteam:implement "Fix: Users can't login after password reset"
-```
-
-System automatically:
-1. Detects bug-type task
-2. Assigns root_cause_analyst first
-3. If initial fix fails, activates Bug Council
-4. 5 perspectives analyze the issue
-5. Synthesized solution implemented
-6. Regression tests added
-
-### Example 3: Security Audit
-
-```bash
-/devteam:implement "Audit authentication system"
-```
-
-System automatically:
-1. Selects: security_auditor, penetration_tester, compliance_engineer
-2. Runs OWASP Top 10 checks
-3. Creates fix tasks for findings
-4. Verifies fixes
-5. Generates compliance report
-
----
-
-## Installation
-
-### Install from Claude Code Marketplace (Recommended)
-
-The easiest way to install DevTeam is directly from within Claude Code:
-
-```bash
-# 1. Add the DevTeam marketplace
-/plugin marketplace add https://github.com/michael-harris/devteam
-
-# 2. Install the plugin
+# From the Claude Code marketplace
+/plugin marketplace add https://github.com/Winnie-Bodhrik/devteam
 /plugin install devteam@devteam-marketplace
 
-# 3. Verify installation
+# Verify it's installed
 /devteam:status
 ```
 
-That's it. The database is auto-initialized on first use. Hooks, agents, skills, and rules are all configured automatically.
+Nothing else to set up — the local database, hooks, agents, and skills are configured automatically on first use.
 
-### Install from Local Clone (Development)
-
-For contributing or local development:
+### Plan and build a feature
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/michael-harris/devteam.git
-
-# 2. Install as a local plugin
-/plugin install /path/to/devteam
-
-# 3. Verify installation
-/devteam:status
+/devteam:plan --feature "Add user authentication with OAuth"
+/devteam:implement
 ```
 
-### Prerequisites
+### Fix a bug
 
+```bash
+/devteam:bug "Login fails for guest users"
+/devteam:issue 123                      # fix a GitHub issue by number
+/devteam:bug "Memory leak" --council    # force the 5-agent Bug Council
+```
+
+### Watch costs
+
+```bash
+/devteam:implement --eco   # use cheaper models for simple work
+/devteam:status --costs    # see what's been spent so far
+```
+
+---
+
+## 12. Cost & Model Tiers, in Plain Terms
+
+Not every task deserves your most expensive engineer. DevTeam scores each task's complexity (0–14) and picks a starting AI model tier accordingly:
+
+| Complexity | Model | Think of it as | Good for |
+|---|---|---|---|
+| 1–4 | Haiku | A junior engineer, fast and cheap | Typo fixes, small docs edits, boilerplate |
+| 5–8 | Sonnet | A mid-level engineer | Regular features, most day-to-day work |
+| 9–14 | Opus | A senior/staff engineer, expensive but thorough | Complex architecture, security-critical code |
+
+Security and architecture tasks are **always** routed to the top tier, regardless of complexity score — the same way a real company wouldn't let a junior hire push directly to the payments system. `--eco` mode simply caps things toward the cheaper tiers for low-stakes work.
+
+---
+
+## 13. What Gets Created in Your Project
+
+```
+your-project/
+├── .devteam/                # DevTeam's own state (database, config) — not your app code
+│   └── devteam.db           # local SQLite database: sessions, costs, results
+├── docs/planning/           # PRDs and task definitions, as JSON files you can read
+├── docs/sprints/            # Sprint definitions
+└── devteam-reports/         # Human-readable reports (kept in git, unlike .devteam/)
+```
+
+Full details, including recommended `.gitignore` entries: [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md).
+
+---
+
+## 14. Commands Reference
+
+| Command | What it does (plain English) |
+|---|---|
+| `/devteam:plan` | Interview you, research your codebase, produce a plan (PRD + tasks + sprints) |
+| `/devteam:implement` | Actually build the plan (or a sprint, a single task, or an ad-hoc request) |
+| `/devteam:bug "<desc>"` | Diagnose and fix a bug, escalating to the Bug Council if it's hard |
+| `/devteam:issue <#>` | Fix a specific GitHub issue by number |
+| `/devteam:issue-new "<desc>"` | File a new, well-formatted GitHub issue |
+| `/devteam:review` | Run a full cross-specialty code review |
+| `/devteam:test` | Coordinate writing/running tests |
+| `/devteam:design` / `/devteam:design-drift` | Generate or audit UI/design-system consistency |
+| `/devteam:status` | Show health, progress, and cost |
+| `/devteam:list` | List all plans, sprints, and tasks |
+| `/devteam:select <plan>` | Choose which plan is "active" |
+| `/devteam:config` | View/change DevTeam's own settings |
+| `/devteam:logs` | View the raw event history |
+| `/devteam:reset` | Un-stick a session that's gone wrong |
+| `/devteam:help` | Ask DevTeam questions about itself |
+| `/devteam:worktree-status`, `worktree-list`, `worktree-cleanup`, `merge-tracks` | Manage parallel-track worktrees (debug/expert use) |
+
+See [commands/README.md](commands/README.md) for full option flags on every command.
+
+---
+
+## 15. Quality Standards — Nothing Ships Without These
+
+| Gate | Requirement |
+|---|---|
+| Tests | 100% passing |
+| Type checking | Zero type errors |
+| Lint | Zero lint errors |
+| Security | No high/critical findings |
+| Coverage | ≥80% |
+| Scope | All changes stayed inside their assigned file boundaries |
+
+---
+
+## 16. Frequently Asked Questions
+
+**Q: Is this a chatbot I talk to, or something else?**
+A: You still interact through Claude Code's normal chat interface, using slash commands (`/devteam:plan`, etc.). What's different is what happens *behind* that command: instead of one general-purpose assistant, a whole roster of specialist agents gets assigned, checked, and re-checked automatically.
+
+**Q: What stops an agent from just giving up on a hard task?**
+A: The persistence system detects "giving up" language and blocks it, forcing continued effort with escalating re-engagement prompts, model upgrades, and eventually the Bug Council — a human is only notified after all of that, and even then the system keeps trying.
+
+**Q: Can an agent touch files outside what it was assigned?**
+A: No. A dedicated Scope Validator agent has veto power and blocks out-of-scope changes; anything it can't block outright gets caught by a pre-commit hook.
+
+**Q: What actually triggers the Bug Council?**
+A: A critical/high-severity bug, 3+ failed attempts at the top AI model tier, a complexity score of 10+, or you explicitly asking for it with `--council`.
+
+**Q: How do I make it pick different specialists for my project?**
+A: Edit `.devteam/agent-capabilities.yaml` — it's a plain YAML file listing keyword/file-pattern triggers per agent.
+
+**Q: Does any of my code or data leave my machine?**
+A: DevTeam's own state (database, reports, configs) is stored locally in your project. The only outbound traffic is the normal AI model calls Claude Code already makes to do the work you asked for.
+
+---
+
+## 17. Installation Details
+
+### Prerequisites
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 - SQLite3
 - Bash 4.0+ (Linux/macOS) or PowerShell 5.1+ (Windows)
 - Git
 
-### Environment Variable (Agent Teams)
+### From the marketplace (recommended)
+```bash
+/plugin marketplace add https://github.com/Winnie-Bodhrik/devteam
+/plugin install devteam@devteam-marketplace
+/devteam:status
+```
 
-To enable Agent Teams (parallel multi-agent execution), set this environment variable before starting Claude Code:
+### From a local clone (for contributing)
+```bash
+git clone https://github.com/Winnie-Bodhrik/devteam.git
+/plugin install /path/to/devteam
+/devteam:status
+```
 
+### Optional: parallel Agent Teams
 ```bash
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
+Enables true concurrent multi-agent execution (used for the parallel tracks described in §10).
 
 ---
 
-## FAQ
+## 18. Contributing
 
-**Q: What stops agents from giving up?**
-
-A: The persistence system detects "give up" language and blocks it, forcing continued effort with escalating re-engagement prompts, model upgrades, and Bug Council activation.
-
-**Q: How does model escalation work?**
-
-A: After 2 consecutive failures at a tier, the model upgrades (haiku→sonnet→opus). After 3 opus failures, Bug Council activates.
-
-**Q: Can agents modify files outside their scope?**
-
-A: No. The scope validator has VETO power and blocks all out-of-scope changes. Agents log observations for out-of-scope issues instead.
-
-**Q: What triggers the Bug Council?**
-
-A: Critical bugs, 3+ failed opus attempts, complexity ≥10, or explicit flag.
-
-**Q: How do I customize agent selection?**
-
-A: Edit `.devteam/agent-capabilities.yaml` to add triggers, keywords, and file patterns.
-
----
-
-## Contributing
-
-Contributions welcome! Areas of interest:
-- Additional language support
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Areas of particular interest:
+- Additional language/framework support
 - New enterprise agent roles
-- Improved selection algorithms
-- Integration with more tools
+- Improved agent-selection logic
+- Integrations with more external tools
 
 ---
 
-## Credits & Acknowledgments
+## 19. Credits & Acknowledgments
 
-This project draws inspiration from and builds upon several pioneering projects in the AI-assisted development space.
+This project draws inspiration from several projects in the AI-assisted development space, while every implementation in this repository is original code.
 
-### Direct Inspirations (Claude Code Ecosystem)
+| Project | What we learned from it |
+|---|---|
+| [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) | The autonomous-loop concept, exit-signal pattern, circuit breaker for stagnation |
+| [everything-claude-code](https://github.com/affaan-m/everything-claude-code) | Specialized agent delegation, cross-platform hook architecture |
+| [awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) | Skill organization and YAML frontmatter conventions |
+| [wshobson/agents](https://github.com/wshobson/agents) | Tiered model assignment, plugin architecture, token-efficiency patterns |
+| [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | Design-system generation patterns |
 
-These projects directly influenced our design and implementation:
+Broader ecosystem inspirations: Aider, AutoGPT, MetaGPT, GPT-Engineer, Sweep AI, OpenHands, and SWE-agent. Standards referenced: OWASP Top 10, WCAG 2.1, SOC2/HIPAA/GDPR/PCI-DSS, Google SRE practices, and The Twelve-Factor App.
 
-| Project | What We Learned | Link |
-|---------|-----------------|------|
-| **ralph-claude-code** | The Ralph autonomous loop concept, EXIT_SIGNAL pattern, circuit breaker for stagnation detection, dual-condition exit gates, `.ralph/` directory structure pattern | [github.com/frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code) |
-| **everything-claude-code** | Specialized agent delegation pattern, cross-platform hook architecture, subagent orchestration strategies, skill/agent separation | [github.com/affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) |
-| **awesome-claude-skills** | Skill organization patterns, YAML frontmatter structure, category-based skill taxonomy | [github.com/ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) |
-| **wshobson/agents** | Tiered model assignment (Opus/Sonnet/Haiku), plugin architecture patterns, token efficiency strategies, 72-plugin modular design | [github.com/wshobson/agents](https://github.com/wshobson/agents) |
-| **ui-ux-pro-max-skill** | Design system generation patterns, industry-specific rule sets, Master+Overrides architecture concept | [github.com/nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) |
-
-### What We Built Upon (Our Additions)
-
-While inspired by these projects, we developed original implementations:
-
-| Feature | Inspiration Source | Our Original Addition |
-|---------|-------------------|----------------------|
-| **Task Loop** | ralph-claude-code's autonomous loop | Added model escalation (haiku→sonnet→opus), Bug Council activation, quality gates integration |
-| **Model Escalation** | wshobson/agents tier concept | Automatic escalation after consecutive failures, complexity-based initial selection, de-escalation after success |
-| **Bug Council** | Original concept | 5-agent multi-perspective debugging system with synthesized solutions |
-| **Scope Enforcement** | Original concept | 6-layer enforcement with VETO power, out-of-scope observations logging |
-| **Anti-Abandonment** | Original concept | Persistence hooks detecting "give up" patterns, escalating re-engagement prompts |
-| **Agent Selection** | everything-claude-code delegation | Task-aware agent selection based on keywords, file types, task type, and language |
-| **Enterprise Agents** | wshobson/agents categories | SRE, Platform Engineer, Compliance Engineer, Penetration Tester, and 8 other enterprise roles |
-
-### Broader Ecosystem Inspirations
-
-| Project | Inspiration | Link |
-|---------|-------------|------|
-| **Aider** | Iterative code refinement and "linting loops" | [github.com/paul-gauthier/aider](https://github.com/paul-gauthier/aider) |
-| **AutoGPT** | Multi-agent orchestration patterns | [github.com/Significant-Gravitas/AutoGPT](https://github.com/Significant-Gravitas/AutoGPT) |
-| **MetaGPT** | Role-based agents, "committee of experts" | [github.com/geekan/MetaGPT](https://github.com/geekan/MetaGPT) |
-| **GPT-Engineer** | PRD-to-code workflows | [github.com/gpt-engineer-org/gpt-engineer](https://github.com/gpt-engineer-org/gpt-engineer) |
-| **Sweep AI** | Automated bug fixing patterns | [github.com/sweepai/sweep](https://github.com/sweepai/sweep) |
-| **OpenHands** | Agent-computer interfaces | [github.com/All-Hands-AI/OpenHands](https://github.com/All-Hands-AI/OpenHands) |
-| **SWE-agent** | Software engineering agent design | [github.com/princeton-nlp/SWE-agent](https://github.com/princeton-nlp/SWE-agent) |
-
-### Standards & Frameworks Referenced
-
-- **OWASP Top 10** - Security testing methodology
-- **WCAG 2.1** - Accessibility compliance standards
-- **SOC2/HIPAA/GDPR/PCI-DSS** - Compliance frameworks
-- **Google SRE** - Site Reliability Engineering practices
-- **The Twelve-Factor App** - Modern application design principles
-
-### Originality Statement
-
-All code in this repository was written from scratch. While we adopted concepts and patterns from the above projects (particularly the Ralph loop concept from frankbria/ralph-claude-code), our implementations are original:
-
-- Our hooks use different file structures (`.devteam/` vs `.ralph/`)
-- Our config uses YAML with model escalation (original uses INI without escalation)
-- Our agent definitions follow a different structure
-- Bug Council, scope enforcement, and anti-abandonment are entirely original systems
+Task Loop, Model Escalation, Bug Council, Scope Enforcement, Anti-Abandonment, and the Execution Ledger/agent-wiring governance system are original systems built for this project — see the git history for the full design record.
 
 ---
 
 ## License
 
-MIT License - See LICENSE file.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
-**Built for Claude Code**
+**Built for Claude Code.**

@@ -22,7 +22,7 @@ When DevTeam is installed as a Claude Code plugin (via marketplace or local inst
 
 ```bash
 # Install from marketplace (hooks auto-configured)
-/plugin marketplace add https://github.com/michael-harris/devteam
+/plugin marketplace add https://github.com/Winnie-Bodhrik/devteam
 /plugin install devteam@devteam-marketplace
 ```
 

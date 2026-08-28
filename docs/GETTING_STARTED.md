@@ -10,7 +10,7 @@ The easiest way to install DevTeam is directly from within Claude Code:
 
 ```bash
 # Add the DevTeam marketplace
-/plugin marketplace add https://github.com/michael-harris/devteam
+/plugin marketplace add https://github.com/Winnie-Bodhrik/devteam
 
 # Install the plugin
 /plugin install devteam@devteam-marketplace
@@ -23,7 +23,7 @@ All hooks, agents, skills, and rules are configured automatically. The SQLite da
 For development or contributing:
 
 ```bash
-git clone https://github.com/michael-harris/devteam.git
+git clone https://github.com/Winnie-Bodhrik/devteam.git
 /plugin install /path/to/devteam
 ```
 
