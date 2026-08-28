@@ -299,7 +299,28 @@ log_agent_started() {
 }
 
 # Log agent completed event
-# Args: agent, model, [files_changed], [tokens_input], [tokens_output], [cost_cents]
+# Args: agent, model, [files_changed], [tokens_input], [tokens_output], [cost_cents], [run_id], [output_summary]
+#
+# run_id is the agent_runs.id returned by the log_agent_started call this is
+# closing (callers already hold it, captured for invoked_by_run_id
+# propagation -- see log_agent_started's docstring). Pass it whenever you
+# have it: without it, the close falls back to matching the most recent
+# 'running' row for this agent+model+session, which mis-closes a DIFFERENT
+# task's row whenever two task-loops dispatch the same agent at the same
+# model concurrently (observed live in a concurrent E2E run: TASK-006's and
+# TASK-007's workflow-compliance rows cross-closed). The exact-id path is
+# always correct; the fallback is a best-effort default for old callers.
+#
+# output_summary is a short, human-readable, 1-2 SENTENCE description of what
+# this specific run actually did (e.g. "Added the /dashboard endpoint with
+# per-course progress aggregation; 3 files changed." or "Requirements FAILED:
+# 2/5 acceptance criteria unmet -- missing course-filter query param."). The
+# column already existed in schema.sql but nothing ever wrote to it, so every
+# agent_runs row was previously legible only as agent+model+status -- no record
+# of what happened. Every dispatching orchestrator (task-loop, sprint-orchestrator)
+# MUST ask the dispatched agent to state this in its own final output, then pass
+# it straight through here. This is the field execution-ledger's per-task report
+# renders as the one-line "what happened" next to each agent in its call table.
 log_agent_completed() {
     local agent="$1"
     local model="$2"
@@ -307,6 +328,16 @@ log_agent_completed() {
     local tokens_input="${4:-0}"
     local tokens_output="${5:-0}"
     local cost_cents="${6:-0}"
+    local run_id="${7:-}"
+    local output_summary="${8:-}"
+
+    if [ -n "$run_id" ] && ! validate_numeric "$run_id" "run_id" 2>/dev/null; then
+        log_warn "Ignoring non-numeric run_id: $run_id" "events"
+        run_id=""
+    fi
+
+    # Cap length defensively -- this is a summary line, not a report.
+    output_summary=$(sanitize_input "$output_summary" 500)
 
     if [ -z "$agent" ]; then
         log_error "Agent name required" "events"
@@ -336,19 +367,33 @@ log_agent_completed() {
         return 0
     fi
 
-    local esc_session_id esc_agent esc_files_changed
+    local esc_session_id esc_agent esc_files_changed esc_output_summary
     esc_session_id=$(sql_escape "$session_id")
     esc_agent=$(sql_escape "$agent")
     esc_files_changed=$(sql_escape "$files_changed")
+    esc_output_summary=$(sql_escape "$output_summary")
 
     local esc_model
     esc_model=$(sql_escape "$model")
 
-    # NOTE: We match on agent+model+session to disambiguate concurrent runs of the
-    # same agent at different model tiers (e.g. after escalation). If two runs share
-    # the same agent name AND model simultaneously, the LIMIT 1 / ORDER BY started_at
-    # heuristic may update the wrong row. A proper fix would be to return the rowid
-    # from log_agent_started() and pass it here, but that requires callers to change.
+    # Exact-id path when the caller passed its own run_id (see docstring above);
+    # otherwise fall back to the agent+model+session heuristic, which is only
+    # safe when at most one 'running' row for this agent+model exists at once.
+    local where_clause
+    if [ -n "$run_id" ]; then
+        where_clause="id = ${run_id} AND session_id = '$esc_session_id'"
+    else
+        where_clause="rowid = (
+            SELECT rowid FROM agent_runs
+            WHERE session_id = '$esc_session_id'
+            AND agent = '$esc_agent'
+            AND model = '$esc_model'
+            AND status = 'running'
+            ORDER BY started_at DESC
+            LIMIT 1
+        )"
+    fi
+
     local query="BEGIN IMMEDIATE TRANSACTION;
         UPDATE agent_runs
         SET status = 'success',
@@ -357,16 +402,9 @@ log_agent_completed() {
             files_changed = '$esc_files_changed',
             tokens_input = ${tokens_input:-0},
             tokens_output = ${tokens_output:-0},
-            cost_cents = ${cost_cents:-0}
-        WHERE rowid = (
-            SELECT rowid FROM agent_runs
-            WHERE session_id = '$esc_session_id'
-            AND agent = '$esc_agent'
-            AND model = '$esc_model'
-            AND status = 'running'
-            ORDER BY started_at DESC
-            LIMIT 1
-        );
+            cost_cents = ${cost_cents:-0},
+            output_summary = NULLIF('$esc_output_summary', '')
+        WHERE $where_clause;
         COMMIT;"
 
     sql_exec "$query" > /dev/null || log_warn "Failed to update agent_runs record" "events"
@@ -376,12 +414,21 @@ log_agent_completed() {
 }
 
 # Log agent failed event
-# Args: agent, model, error_message, [error_type]
+# Args: agent, model, error_message, [error_type], [run_id]
+#
+# run_id: see log_agent_completed's docstring -- pass it whenever you have it
+# to close the exact row instead of the racy agent+model+session heuristic.
 log_agent_failed() {
     local agent="$1"
     local model="$2"
     local error_message="$3"
     local error_type="${4:-unknown}"
+    local run_id="${5:-}"
+
+    if [ -n "$run_id" ] && ! validate_numeric "$run_id" "run_id" 2>/dev/null; then
+        log_warn "Ignoring non-numeric run_id: $run_id" "events"
+        run_id=""
+    fi
 
     if [ -z "$agent" ]; then
         log_error "Agent name required" "events"
@@ -410,15 +457,12 @@ log_agent_failed() {
     local esc_model
     esc_model=$(sql_escape "$model")
 
-    # NOTE: Match on model too to disambiguate concurrent same-name agents at
-    # different tiers. See comment in log_agent_completed() for remaining caveats.
-    local query="UPDATE agent_runs
-        SET status = 'failed',
-            ended_at = CURRENT_TIMESTAMP,
-            duration_seconds = CAST((julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400 AS INTEGER),
-            error_message = '$esc_error_message',
-            error_type = '$esc_error_type'
-        WHERE rowid = (
+    # Exact-id path when available; see log_agent_completed() for the same pattern.
+    local where_clause
+    if [ -n "$run_id" ]; then
+        where_clause="id = ${run_id} AND session_id = '$esc_session_id'"
+    else
+        where_clause="rowid = (
             SELECT rowid FROM agent_runs
             WHERE session_id = '$esc_session_id'
             AND agent = '$esc_agent'
@@ -426,7 +470,16 @@ log_agent_failed() {
             AND status = 'running'
             ORDER BY started_at DESC
             LIMIT 1
-        );"
+        )"
+    fi
+
+    local query="UPDATE agent_runs
+        SET status = 'failed',
+            ended_at = CURRENT_TIMESTAMP,
+            duration_seconds = CAST((julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400 AS INTEGER),
+            error_message = '$esc_error_message',
+            error_type = '$esc_error_type'
+        WHERE $where_clause;"
 
     sql_exec "$query" > /dev/null || log_warn "Failed to update agent_runs record" "events"
 

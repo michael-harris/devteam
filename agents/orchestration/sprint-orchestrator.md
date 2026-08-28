@@ -153,12 +153,22 @@ team_setup:
 ### Team Execution Flow
 
 1. **Analyze dependency graph** to identify parallelizable task groups
-2. **Create teammates** for each task in the current parallel group
-3. Each teammate runs its own **Task Loop** in an **isolated worktree**
-4. Teammates work **simultaneously** — no file conflicts due to worktree isolation
-5. Use `TaskCompleted` hook to detect when teammates finish
-6. When all parallel tasks complete, **merge worktrees** using Track Merger
-7. Proceed to next dependency group, or to your own sprint-level validation phase once all groups are done
+2. **Before creating each teammate**, log its dispatch and capture the run id exactly as Step 3b below does for the sequential path — this is not optional just because the dispatch happens through a teammate instead of a direct `Task()` call, the same `agent_runs` row and call-chain attribution are required either way:
+   ```bash
+   source scripts/events.sh
+   TL_RUN_ID_task_001=$(log_agent_started "orchestration:task-loop" "opus" "TASK-001"        "orchestration:sprint-orchestrator" "$own_run_id")
+   ```
+   Track each teammate's `TL_RUN_ID_<task_id>` alongside its team-member name — you need it in step 5 below.
+3. **Create teammates** for each task in the current parallel group
+4. Each teammate runs its own **Task Loop** in an **isolated worktree**
+5. Teammates work **simultaneously** — no file conflicts due to worktree isolation
+6. **Use `TaskCompleted` hook to detect when teammates finish, and close each teammate's run the moment it does** — by its exact `TL_RUN_ID_<task_id>` from step 2, never the bare heuristic (multiple teammates dispatching `orchestration:task-loop` at the same model concurrently is exactly the cross-close scenario documented in `orchestration:task-loop`'s own dispatch-close section — Agent Teams mode is *more* exposed to this race than the sequential path, not less, since every teammate genuinely runs at the same instant):
+   ```bash
+   log_agent_completed "orchestration:task-loop" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents" "$TL_RUN_ID_task_001" "$output_summary"
+   ```
+   on that teammate's COMPLETE, or the `log_agent_failed` equivalent (also by exact run id) on FAILED/HALTED.
+7. When all parallel tasks complete, **merge worktrees** using Track Merger
+8. Proceed to next dependency group, or to your own sprint-level validation phase once all groups are done
 
 ### Sequential Task Handling
 
@@ -254,7 +264,7 @@ If Agent Teams is not enabled, fall back to sequential subagent dispatch (Execut
          * Model escalation on failures
          * Bug Council activation if stuck
        - Task Loop returns: COMPLETE, FAILED, or HALTED
-       - Close out the run: `log_agent_completed "orchestration:task-loop" "opus" "[]" 0 0 0` on COMPLETE, or `log_agent_failed "orchestration:task-loop" "opus" "<reason>"` on FAILED/HALTED
+       - Close out the run **by the exact `$TL_RUN_ID` you captured above** (never the bare heuristic — concurrent tracks dispatching task-loop simultaneously will otherwise cross-close each other's rows): `log_agent_completed "orchestration:task-loop" "opus" "[]" 0 0 0 "$TL_RUN_ID" "<output_summary>"` on COMPLETE, or `log_agent_failed "orchestration:task-loop" "opus" "<reason>" "<error_type>" "$TL_RUN_ID"` on FAILED/HALTED. `<output_summary>` is a 1-2 sentence summary of what the task actually accomplished (task-loop's own final report tells you this — e.g. "TASK-004 complete: /dashboard endpoint implemented and validated, 3 files changed."), same requirement and rationale as documented in `orchestration:task-loop`'s own dispatch-close section.
 
    3c. After task completion:
        - Query SQLite for updated task state (task-loop updated it)

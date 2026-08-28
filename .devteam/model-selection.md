@@ -123,11 +123,15 @@ def calculate_complexity(task):
     type_scores = {
         'documentation': 0,
         'testing': 1,
+        'design': 1,             # spec/reference work: token/component decisions, no runtime logic
         'backend': 2,
         'frontend': 2,
         'database': 2,
+        'infrastructure': 2,     # config-heavy, similar risk profile to backend/database
+        'python-generic': 2,     # same tier as backend -- general-purpose scripting/utilities
         'fullstack': 3,
         'architecture': 3,
+        'data_architecture': 3,  # schema/data-model decisions carry the same weight as architecture
     }
     score += type_scores.get(task.task_type, 2)
 

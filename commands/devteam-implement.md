@@ -144,17 +144,14 @@ adhoc_task:
 
 ### Phase 3: Agent Selection
 
-Based on task type and content, select appropriate agents.
+For an ad-hoc task (no pre-existing TASK-XXX.json — a normal sprint/plan task's `suggested_agent` is already set by `planning:task-graph-analyzer` during `/devteam:plan` and this phase does not apply to it), determine `suggested_agent` with this precedence, in order — stop at the first match, do not blend:
+
+1. **`--type` flag, if the user passed one** (e.g. `/devteam:implement "..." --type security`): look it up directly in `task_type_agents` below.
+2. **Keyword/pattern match against the description**: if it matches one of `task_type_agents`' keys (a "security audit", "refactor X", or "fix broken Y" style description), use that entry's `primary` as `suggested_agent`, and note its `support` list in the dispatch prompt as agents the primary may itself consult.
+3. **Otherwise**, infer from file types touched / language / general keywords (a normal implementation task) and pick the matching leaf implementer (e.g. `backend:api-developer-python`, `frontend:developer`) the same way `task-graph-analyzer` would for a planned task.
 
 ```yaml
-# Agent selection weights
-selection_weights:
-  keywords: 40%
-  file_types: 30%
-  task_type: 20%
-  language: 10%
-
-# Task type overrides
+# Task type overrides -- checked first per the precedence above
 task_type_agents:
   security:
     primary: quality:security-auditor
@@ -165,6 +162,19 @@ task_type_agents:
   bug:
     primary: diagnosis:root-cause-analyst
     support: [orchestration:bug-council-orchestrator]
+```
+
+**Concrete example — a "refactor" ad-hoc task resolves to a real dispatch, not just a config lookup.** For `/devteam:implement "Refactor the payment module for testability" --type refactor` (or an ad-hoc description that keyword-matches "refactor"), `suggested_agent` resolves to `quality:refactoring-coordinator` per the table above, and task-loop's Step 1 (`agents/orchestration/task-loop.md`) then dispatches it exactly like any other `{suggested_agent}` resolution:
+
+```javascript
+Task({
+  subagent_type: "quality:refactoring-coordinator",
+  model: "sonnet",  // Start here. Escalate to "opus" after 2 failures, per task-loop's normal rule.
+  prompt: `Refactor the payment module for testability.
+
+    Support agents available if needed: frontend:code-reviewer.
+    Acceptance criteria: ...`
+})
 ```
 
 ### Phase 4: Model Selection
@@ -215,9 +225,9 @@ const result = await Task({
 ```
 ```bash
 if [ "$result_status" = "COMPLETE" ]; then
-    log_agent_completed "orchestration:task-loop" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents"
+    log_agent_completed "orchestration:task-loop" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents" "$TL_RUN_ID"
 else
-    log_agent_failed "orchestration:task-loop" "opus" "$result_reason"
+    log_agent_failed "orchestration:task-loop" "opus" "$result_reason" "" "$TL_RUN_ID"
 fi
 ```
 
@@ -242,9 +252,9 @@ const result = await Task({
 ```
 ```bash
 if [ "$result_status" = "COMPLETE" ]; then
-    log_agent_completed "orchestration:sprint-orchestrator" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents"
+    log_agent_completed "orchestration:sprint-orchestrator" "opus" "$files_changed_json" "$tokens_in" "$tokens_out" "$cost_cents" "$SO_RUN_ID"
 else
-    log_agent_failed "orchestration:sprint-orchestrator" "opus" "$result_reason"
+    log_agent_failed "orchestration:sprint-orchestrator" "opus" "$result_reason" "" "$SO_RUN_ID"
 fi
 ```
 

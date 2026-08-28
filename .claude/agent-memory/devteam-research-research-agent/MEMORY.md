@@ -1,0 +1,1 @@
+- [Local toolchain baseline](project_local_toolchain_baseline.md) — Python 3.14 / Node 26 / uv; `passlib[bcrypt]` is broken here, use `pwdlib`

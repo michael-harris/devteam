@@ -1,0 +1,2 @@
+- [Installed plugin lags dev repo](project_installed_plugin_lags_dev_repo.md) — dispatched sub-agents load the pre-audit upstream plugin, not the dev repo's Phase 0-7 wiring
+- [state.sh gotchas](project_state_sh_gotchas.md) — `set_phase "in_progress"` is invalid, scripts are bash-only, retarget the DB via absolute `DEVTEAM_DIR`

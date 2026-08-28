@@ -733,6 +733,6 @@ ios_developer:
 ## See Also
 
 - [Android Developer Agent](./android-developer.md) - Android equivalent
-- [UI Designer Agent](../frontend/frontend-designer.md) - Design specifications
+- [iOS Designer Agent](./ios-designer.md) - Design specifications
 - [API Designer Agent](../backend/api-designer.md) - API contracts
 - [Mobile Accessibility Agent](../accessibility/mobile-accessibility-specialist.md) - Accessibility guidelines

@@ -406,3 +406,6 @@ docker-compose.*.local.yml
 !scripts/lib/**
 !hooks/lib/
 !hooks/lib/**
+
+# Personal local Claude Code settings (never shared/committed)
+.claude/settings.local.json

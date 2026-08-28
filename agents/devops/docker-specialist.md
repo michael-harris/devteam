@@ -5,7 +5,7 @@ tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 # Docker Specialist Agent
 
-**Model:** haiku
+**Model:** sonnet
 **Tier:** Sonnet
 **Purpose:** Docker containerization and optimization expert
 

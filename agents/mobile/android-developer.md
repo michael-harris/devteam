@@ -549,6 +549,6 @@ android_developer:
 ## See Also
 
 - [iOS Developer Agent](./ios-developer.md) - iOS equivalent
-- [UI Designer Agent](../frontend/frontend-designer.md) - Design specifications
+- [Android Designer Agent](./android-designer.md) - Design specifications
 - [API Designer Agent](../backend/api-designer.md) - API contracts
 - [Mobile Accessibility Agent](../accessibility/mobile-accessibility-specialist.md) - Accessibility guidelines

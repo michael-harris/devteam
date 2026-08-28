@@ -157,9 +157,9 @@ Create directories with `mkdir -p devteam-reports/tasks devteam-reports/sprints`
 
 ## Agent Calls
 
-| Agent | Model | Status | Duration | Files Changed |
-|---|---|---|---|---|
-{one row per agent_runs record for this task, in started_at order}
+| Agent | Model | Status | Duration | Files Changed | What it did |
+|---|---|---|---|---|---|
+{one row per agent_runs record for this task, in started_at order. "What it did" = agent_runs.output_summary verbatim (a 1-2 sentence description the dispatching orchestrator captured from the agent's own final output -- see task-loop.md/sprint-orchestrator.md's dispatch-close docs). If output_summary is NULL for a row (an older run predating this field, or a caller that didn't pass one), render "(no summary recorded)" -- do not fabricate one from guesswork.}
 
 ## Orchestrator Chain
 
