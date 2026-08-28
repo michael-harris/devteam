@@ -291,6 +291,23 @@ hybrid_testing_delegation:
 
 **This agent collects and aggregates results from the specialists above. It does NOT execute Playwright, Puppeteer, or Computer Use directly.**
 
+### Step 8: Record the Gate Result
+
+After aggregating PASS/FAIL, record it via `scripts/events.sh` — **the 2nd argument is `details` (a JSON object), never a bare iteration number or count.** Passing a raw number or a hand-built fragment there (e.g. `"5/5}"`) writes invalid, truncated JSON into `gate_results.details` (`error_count`/`error_type` breakdowns become unreadable). Use `json_object` to build it correctly:
+
+```bash
+source scripts/events.sh
+
+# On PASS:
+details=$(json_object "tests_passed" "12" "tests_total" "12" "coverage_percent" "87")
+log_gate_passed "tests" "{\"tests_passed\": 12, \"tests_total\": 12, \"coverage_percent\": 87}"
+
+# On FAIL:
+log_gate_failed "tests" "3" "{\"failing_tests\": [\"test_auth\", \"test_login\"]}"
+```
+
+Note `gate_results` has no `task_id` column (session-scoped only) — this is a known, documented limitation (see `orchestration:execution-ledger`'s handling of it), not something to work around here. Your own `agent_runs` row (PASS = `success`, FAIL = `failed`, set via `log_agent_completed`/`log_agent_failed` in whatever dispatched you) remains the authoritative per-task gate verdict.
+
 ## Output Format
 
 ```yaml

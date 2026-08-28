@@ -23,13 +23,18 @@ DEVTEAM_DIR="${DEVTEAM_DIR:-.devteam}"
 DB_FILE="${DEVTEAM_DIR}/devteam.db"
 LOG_LEVEL="${DEVTEAM_LOG_LEVEL:-info}"  # debug, info, warn, error
 
-# Valid log levels (numeric for comparison)
-declare -A LOG_LEVELS=(
-    [debug]=0
-    [info]=1
-    [warn]=2
-    [error]=3
-)
+# Numeric value for a log-level name. A function, not an associative array --
+# stock macOS ships /bin/bash 3.2 (pre-4.0), which has no `declare -A`; this
+# form works identically on bash 3.2+ and on Linux's bash 4/5.
+_log_level_num() {
+    case "$1" in
+        debug) echo 0 ;;
+        info)  echo 1 ;;
+        warn)  echo 2 ;;
+        error) echo 3 ;;
+        *)     echo 1 ;;
+    esac
+}
 
 # Colors for output
 readonly COLOR_RED='\033[0;31m'
@@ -45,8 +50,9 @@ readonly COLOR_NC='\033[0m'
 # Internal: Check if log level should be output
 _should_log() {
     local level="$1"
-    local current_level="${LOG_LEVELS[$LOG_LEVEL]:-1}"
-    local msg_level="${LOG_LEVELS[$level]:-1}"
+    local current_level msg_level
+    current_level="$(_log_level_num "$LOG_LEVEL")"
+    msg_level="$(_log_level_num "$level")"
     [ "$msg_level" -ge "$current_level" ]
 }
 
@@ -266,37 +272,44 @@ readonly VALID_TABLES=(
     "task_files"
 )
 
-# Valid column names per table (whitelist to prevent SQL injection)
-declare -A VALID_COLUMNS
-VALID_COLUMNS[sessions]="id,started_at,ended_at,command,command_type,status,exit_reason,current_phase,current_task_id,current_agent,current_model,current_iteration,max_iterations,consecutive_failures,max_consecutive_failures,circuit_breaker_state,plan_id,sprint_id,execution_mode,total_tokens_input,total_tokens_output,total_cost_cents,bug_council_activated,bug_council_reason"
-VALID_COLUMNS[session_state]="session_id,key,value,updated_at"
-VALID_COLUMNS[events]="id,session_id,timestamp,event_type,event_category,agent,model,iteration,phase,data,metadata,message,tokens_input,tokens_output,cost_cents"
-VALID_COLUMNS[schema_version]="version,applied_at"
-VALID_COLUMNS[agent_runs]="id,session_id,agent,agent_type,model,started_at,ended_at,duration_seconds,status,error_message,error_type,task_id,iteration,attempt,tokens_input,tokens_output,cost_cents,files_changed,output_summary"
-VALID_COLUMNS[gate_results]="id,session_id,gate,iteration,passed,details,error_count,warning_count,coverage_percent,timestamp,duration_seconds"
-VALID_COLUMNS[interviews]="id,session_id,interview_type,started_at,completed_at,status,questions_asked,questions_answered"
-VALID_COLUMNS[interview_questions]="id,interview_id,question_key,question_text,question_type,response,responded_at,sequence,required"
-VALID_COLUMNS[research_sessions]="id,session_id,started_at,completed_at,status,findings_count,recommendations_count,blockers_found"
-VALID_COLUMNS[research_findings]="id,research_session_id,finding_type,title,description,source,file_path,evidence,priority,timestamp"
-VALID_COLUMNS[bugs]="id,session_id,description,severity,complexity,root_cause,diagnosis_method,fix_summary,files_changed,prevention_measures,status,created_at,resolved_at,council_activated,council_votes"
-VALID_COLUMNS[plans]="id,name,description,plan_type,prd_path,tasks_path,sprints_path,status,total_sprints,completed_sprints,total_tasks,completed_tasks,created_at,started_at,completed_at,research_session_id"
-VALID_COLUMNS[escalations]="id,session_id,from_model,to_model,agent,reason,failure_count,iteration,task_id,timestamp"
-VALID_COLUMNS[acceptance_criteria]="id,task_id,sprint_id,plan_id,criterion_id,description,category,passes,verified_at,verified_by,verification_method,verification_evidence,last_failure_reason,failure_count,priority,sequence,created_at,updated_at"
-VALID_COLUMNS[features]="id,plan_id,sprint_id,feature_id,name,description,category,steps,passes,all_steps_pass,steps_total,steps_passed,verified_at,verified_by,priority,sequence,created_at,updated_at"
-VALID_COLUMNS[context_snapshots]="id,session_id,snapshot_type,tokens_before,tokens_after,tokens_saved,preserved_items,summarized_items,summary_text,trigger_reason,created_at"
-VALID_COLUMNS[context_budgets]="id,session_id,model,context_limit,current_usage,usage_percent,warn_threshold,summarize_threshold,status,last_action,updated_at"
-VALID_COLUMNS[progress_summaries]="id,session_id,summary_text,from_iteration,to_iteration,tasks_completed,tasks_remaining,tests_passing,tests_failing,features_passing,features_total,last_commit_sha,files_changed,created_at"
-VALID_COLUMNS[session_phases]="id,session_id,phase_type,is_first_run,init_script_created,features_enumerated,progress_file_created,baseline_commit_sha,features_attempted,features_completed,resumed_from_session,resume_point,created_at"
-VALID_COLUMNS[baselines]="id,tag_name,commit_hash,milestone,description,branch,files_changed,created_at"
-VALID_COLUMNS[checkpoints]="id,checkpoint_id,path,description,git_commit,session_id,task_id,sprint_id,can_restore,created_at"
-VALID_COLUMNS[checkpoint_restores]="id,checkpoint_id,restored_at"
-VALID_COLUMNS[rollbacks]="id,rollback_type,target_commit,target_tag,reason,from_commit,trigger_type,check_type,backup_branch,rolled_back_at"
-VALID_COLUMNS[token_usage]="id,session_id,task_id,sprint_id,model,input_tokens,output_tokens,cost_usd,operation,agent_name,recorded_at"
-VALID_COLUMNS[error_log]="id,session_id,task_id,operation,error_type,error_message,error_pattern,recovery_action,recovery_success,retry_count,circuit_opened,logged_at"
-VALID_COLUMNS[dead_letter]="id,operation_type,operation_params,error_message,stack_trace,attempt_count,session_id,task_id,status,retry_after,expires_at,created_at"
-VALID_COLUMNS[tasks]="id,name,description,task_type,plan_id,sprint_id,parent_task_id,session_id,status,scope_files,scope_json,assigned_agent,assigned_model,priority,sequence,depends_on,blocks,estimated_effort,actual_iterations,files_changed,created_at,started_at,completed_at,result_summary,error_message,commit_sha"
-VALID_COLUMNS[task_attempts]="id,task_id,session_id,attempt_number,model,agent,started_at,ended_at,duration_seconds,status,error_type,error_message,tokens_input,tokens_output,cost_cents"
-VALID_COLUMNS[task_files]="id,task_id,file_path,file_type,access_type,is_pattern"
+# Valid column names per table (whitelist to prevent SQL injection). A
+# function, not an associative array -- stock macOS ships /bin/bash 3.2
+# (pre-4.0), which has no `declare -A`; this form works identically on
+# bash 3.2+ and on Linux's bash 4/5.
+_valid_columns_for_table() {
+    case "$1" in
+        sessions) echo "id,started_at,ended_at,command,command_type,status,exit_reason,current_phase,current_task_id,current_agent,current_model,current_iteration,max_iterations,consecutive_failures,max_consecutive_failures,circuit_breaker_state,plan_id,sprint_id,execution_mode,total_tokens_input,total_tokens_output,total_cost_cents,bug_council_activated,bug_council_reason" ;;
+        session_state) echo "session_id,key,value,updated_at" ;;
+        events) echo "id,session_id,timestamp,event_type,event_category,agent,model,iteration,phase,data,metadata,message,tokens_input,tokens_output,cost_cents" ;;
+        schema_version) echo "version,applied_at" ;;
+        agent_runs) echo "id,session_id,agent,agent_type,model,started_at,ended_at,duration_seconds,status,error_message,error_type,task_id,iteration,attempt,tokens_input,tokens_output,cost_cents,files_changed,output_summary" ;;
+        gate_results) echo "id,session_id,gate,iteration,passed,details,error_count,warning_count,coverage_percent,timestamp,duration_seconds" ;;
+        interviews) echo "id,session_id,interview_type,started_at,completed_at,status,questions_asked,questions_answered" ;;
+        interview_questions) echo "id,interview_id,question_key,question_text,question_type,response,responded_at,sequence,required" ;;
+        research_sessions) echo "id,session_id,started_at,completed_at,status,findings_count,recommendations_count,blockers_found" ;;
+        research_findings) echo "id,research_session_id,finding_type,title,description,source,file_path,evidence,priority,timestamp" ;;
+        bugs) echo "id,session_id,description,severity,complexity,root_cause,diagnosis_method,fix_summary,files_changed,prevention_measures,status,created_at,resolved_at,council_activated,council_votes" ;;
+        plans) echo "id,name,description,plan_type,prd_path,tasks_path,sprints_path,status,total_sprints,completed_sprints,total_tasks,completed_tasks,created_at,started_at,completed_at,research_session_id" ;;
+        escalations) echo "id,session_id,from_model,to_model,agent,reason,failure_count,iteration,task_id,timestamp" ;;
+        acceptance_criteria) echo "id,task_id,sprint_id,plan_id,criterion_id,description,category,passes,verified_at,verified_by,verification_method,verification_evidence,last_failure_reason,failure_count,priority,sequence,created_at,updated_at" ;;
+        features) echo "id,plan_id,sprint_id,feature_id,name,description,category,steps,passes,all_steps_pass,steps_total,steps_passed,verified_at,verified_by,priority,sequence,created_at,updated_at" ;;
+        context_snapshots) echo "id,session_id,snapshot_type,tokens_before,tokens_after,tokens_saved,preserved_items,summarized_items,summary_text,trigger_reason,created_at" ;;
+        context_budgets) echo "id,session_id,model,context_limit,current_usage,usage_percent,warn_threshold,summarize_threshold,status,last_action,updated_at" ;;
+        progress_summaries) echo "id,session_id,summary_text,from_iteration,to_iteration,tasks_completed,tasks_remaining,tests_passing,tests_failing,features_passing,features_total,last_commit_sha,files_changed,created_at" ;;
+        session_phases) echo "id,session_id,phase_type,is_first_run,init_script_created,features_enumerated,progress_file_created,baseline_commit_sha,features_attempted,features_completed,resumed_from_session,resume_point,created_at" ;;
+        baselines) echo "id,tag_name,commit_hash,milestone,description,branch,files_changed,created_at" ;;
+        checkpoints) echo "id,checkpoint_id,path,description,git_commit,session_id,task_id,sprint_id,can_restore,created_at" ;;
+        checkpoint_restores) echo "id,checkpoint_id,restored_at" ;;
+        rollbacks) echo "id,rollback_type,target_commit,target_tag,reason,from_commit,trigger_type,check_type,backup_branch,rolled_back_at" ;;
+        token_usage) echo "id,session_id,task_id,sprint_id,model,input_tokens,output_tokens,cost_usd,operation,agent_name,recorded_at" ;;
+        error_log) echo "id,session_id,task_id,operation,error_type,error_message,error_pattern,recovery_action,recovery_success,retry_count,circuit_opened,logged_at" ;;
+        dead_letter) echo "id,operation_type,operation_params,error_message,stack_trace,attempt_count,session_id,task_id,status,retry_after,expires_at,created_at" ;;
+        tasks) echo "id,name,description,task_type,plan_id,sprint_id,parent_task_id,session_id,status,scope_files,scope_json,assigned_agent,assigned_model,priority,sequence,depends_on,blocks,estimated_effort,actual_iterations,files_changed,created_at,started_at,completed_at,result_summary,error_message,commit_sha" ;;
+        task_attempts) echo "id,task_id,session_id,attempt_number,model,agent,started_at,ended_at,duration_seconds,status,error_type,error_message,tokens_input,tokens_output,cost_cents" ;;
+        task_files) echo "id,task_id,file_path,file_type,access_type,is_pattern" ;;
+        *) echo "" ;;
+    esac
+}
 
 # Validate table name against whitelist
 validate_table_name() {
@@ -314,7 +327,8 @@ validate_column_name() {
     local column="$2"
 
     # Get valid columns for this table
-    local valid_cols="${VALID_COLUMNS[$table]:-}"
+    local valid_cols
+    valid_cols="$(_valid_columns_for_table "$table")"
     if [ -z "$valid_cols" ]; then
         log_error "Unknown table for column validation: $table" "validation"
         return 1

@@ -284,6 +284,7 @@ final_diagnosis:
     primary:
       location: "src/hooks/useUser.js:34"
       change: "Add null check: user?.settings || defaultSettings"
+    suggested_agent: "frontend:developer"  # from the Language-to-Agent Mapping table below, resolved against `primary.location`'s extension/path
 
     additional:
       - "Restore session fallback from commit abc123"
@@ -297,11 +298,11 @@ final_diagnosis:
     - "Rapid navigation during auth"
 ```
 
-### Step 7: Execute Fix
+### Step 7: Return the Diagnosis — Do NOT Implement the Fix Yourself
 
-Select the implementation agent based on the bug's file extension and location:
+**You are a diagnostic council, not an implementer. You have no `Task` tool in your own frontmatter for exactly this reason.** Your caller — always `orchestration:task-loop`, per its own documented contract (`agents/orchestration/task-loop.md`'s `bug_council_activation.receives_from_council: root_cause_analysis, recommended_fix, architectural_insights` — no implemented fix in that list) — is the one that takes your diagnosis, spawns a fresh implementation attempt itself, and re-runs the full scope-validator/quality-gate-enforcer/requirements-validator/workflow-compliance loop on it. If you implemented the fix here instead, that entire loop — every quality gate, the self-review requirement, and the `execution-ledger` report — would be silently bypassed for this fix, since none of it lives in this file.
 
-**Language-to-Agent Mapping:**
+**Language-to-Agent Mapping — advisory only, for your `recommended_fix` output, not something you invoke:**
 
 | File Extension | Path Check | Agent ID |
 |---------------|------------|----------|
@@ -319,23 +320,7 @@ Select the implementation agent based on the bug's file extension and location:
 | `.sql` | any | `database:developer-python` |
 | (other/unknown) | any | `python:developer-generic` |
 
-Pass to implementation:
-
-```javascript
-// Select agent based on file extension mapping above
-const agent = selectAgentFromMapping(final_diagnosis.recommended_fix.primary.location);
-
-Task({
-  subagent_type: agent,
-  model: "opus",  // Bug Council is activated for complex bugs — always use opus for the fix
-  prompt: `Fix bug based on Bug Council diagnosis:
-
-    ${final_diagnosis}
-
-    Implement the recommended fix and additional improvements.
-    Add test cases to prevent regression.`
-})
-```
+Include this table's lookup result as `recommended_fix.suggested_agent` in your Output Format below (see `final_diagnosis` shape) — task-loop uses it as the `suggested_agent` hint for the implementation attempt it spawns, exactly like the `suggested_agent` field on any other task.
 
 ## Output Format
 

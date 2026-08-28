@@ -10,9 +10,9 @@ A comprehensive suite of specialized UI/UX agents inspired by [ui-ux-pro-max-ski
 |-------|-----------|----------|
 | **Design System Orchestrator** | Coordinates design workflow | Orchestrates all UX agents |
 | **Design System Architect** | Comprehensive design generation | Full design system output |
-| **UI Style Curator** | Visual style selection | 67 UI styles |
-| **Color Palette Specialist** | Industry-specific colors | 96 color palettes |
-| **Typography Specialist** | Font selection & pairing | 57 font pairings |
+| **UI Style Curator** | Visual style selection | 67 UI styles (fully specified) |
+| **Color Palette Specialist** | Industry-specific colors | 96-palette taxonomy, 20 concretely specified — see the agent's own honest-status note |
+| **Typography Specialist** | Font selection & pairing | 57-pairing taxonomy, 23 concretely specified — see the agent's own honest-status note |
 | **Data Visualization Designer** | Charts & dashboards | 25 chart types, 10 dashboard styles |
 
 ### Design Enforcement Agents (Quality Gates)
@@ -80,9 +80,9 @@ agents/ux/
 ├── README.md                           # This file
 ├── design-system-orchestrator.md       # Main orchestrator
 ├── design-system-architect.md          # Comprehensive design generation
-├── ui-style-curator.md                 # 67 UI styles
-├── color-palette-specialist.md         # 96 industry palettes
-├── typography-specialist.md            # 57 font pairings
+├── ui-style-curator.md                 # 67 UI styles (fully specified)
+├── color-palette-specialist.md         # 96-palette taxonomy, 20 concretely specified
+├── typography-specialist.md            # 57-pairing taxonomy, 23 concretely specified
 ├── data-visualization-designer.md      # Charts & dashboards
 ├── design-compliance-validator.md      # Quality gate - validates code
 └── design-drift-detector.md            # Monitors for drift over time

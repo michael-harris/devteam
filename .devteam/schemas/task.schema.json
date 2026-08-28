@@ -48,7 +48,7 @@
         "design",
         "data_architecture"
       ],
-      "description": "Union of every task_type value found in commands/devteam-plan.md (backend|frontend|database|fullstack|testing|infrastructure) and agents/planning/task-graph-analyzer.md (fullstack|backend|frontend|database|python-generic|infrastructure), plus 'design' and 'data_architecture' added per the audit's Phase 1 (closes the gap in Architecture Audit §5 where no task_type value could ever route to a design agent). NOTE: .devteam/model-selection.md's calculate_complexity() type_scores map does not yet recognize 'python-generic', 'design', or 'data_architecture' as of this schema's introduction — it falls back to a default weight of 2 for unrecognized types, so this is a soft gap (no crash, just an under/over-weighted complexity score) left for a later phase, not fixed here."
+      "description": "Union of every task_type value found in commands/devteam-plan.md (backend|frontend|database|fullstack|testing|infrastructure) and agents/planning/task-graph-analyzer.md (fullstack|backend|frontend|database|python-generic|infrastructure), plus 'design' and 'data_architecture' added per the audit's Phase 1 (closes the gap in Architecture Audit §5 where no task_type value could ever route to a design agent). .devteam/model-selection.md's calculate_complexity() type_scores map now recognizes every value in this enum ('python-generic', 'infrastructure' at weight 2; 'design' at weight 1; 'data_architecture' at weight 3, matching 'architecture') -- the soft gap noted in earlier drafts of this schema is closed."
     },
     "complexity": {
       "type": "object",

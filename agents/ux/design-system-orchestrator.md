@@ -44,6 +44,8 @@ phase_3_synthesis:
   - Run pre-delivery checklist
 ```
 
+**Phase 3 synthesis is a mandatory disk-write step, not a description of what "the design system" conceptually contains.** You MUST call the `Write` tool for every file in the "Output Format" tree below before returning — `design-system/MASTER.md`, each `tokens/*.json`, each `components/*.md`, etc. Downstream, `frontend:developer` (and the platform designers' own consumers) read these exact paths as a hard MANDATORY precondition before touching any UI-bearing task, and `quality-gate-enforcer`'s Design Compliance Gate treats `design-system/MASTER.md`'s existence as the signal that a design system exists at all. If you return without having written these files, every downstream consumer either silently has nothing to read or incorrectly treats the design system as absent — there is no partial-credit or "documented but not materialized" outcome that works here.
+
 ### Phase 2 Delegation Calls
 
 The table above is the plan; every row is dispatched as a real `Task()` call, not just described. Your caller (typically `ux:ux-system-coordinator`) should have logged an `own_run_id` via `log_agent_started "ux:design-system-orchestrator" ...` before invoking you — thread it through so `ux-system-coordinator -> design-system-orchestrator -> {specialist}` stays reconstructable via `v_agent_call_chain`:
@@ -140,6 +142,8 @@ to_color_palette_specialist:
 ```
 
 ## Output Format
+
+**Every path below is a file you write with the `Write` tool — this section is the write target, not a description.**
 
 ### Design System Package
 ```

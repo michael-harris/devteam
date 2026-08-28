@@ -1,0 +1,1 @@
+- [events.sh ledger defects](project_events_sh_ledger_defects.md) — unfixed row-resolution race + details-quoting bug corrupt agent_runs/gate_results when task-loops run concurrently

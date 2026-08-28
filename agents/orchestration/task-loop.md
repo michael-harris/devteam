@@ -271,14 +271,26 @@ source scripts/events.sh
 RUN_ID=$(log_agent_started "<subagent_type>" "<model>" "$task_id" \
     "orchestration:task-loop" "$own_run_id")
 ```
-After the `Task()` call returns, close the row: `log_agent_completed "<subagent_type>" "<model>" "<files_changed_json>" <tokens_in> <tokens_out> <cost_cents>` on success, or `log_agent_failed "<subagent_type>" "<model>" "<error_message>"` on failure.
+After the `Task()` call returns, close the row **by the exact `$RUN_ID` you captured above** — never omit it, since two concurrent task-loops dispatching the same agent at the same model will otherwise cross-close each other's rows (this really happened in a live concurrent run: TASK-006's and TASK-007's `workflow-compliance` rows swapped): `log_agent_completed "<subagent_type>" "<model>" "<files_changed_json>" <tokens_in> <tokens_out> <cost_cents> "$RUN_ID" "<output_summary>"` on success, or `log_agent_failed "<subagent_type>" "<model>" "<error_message>" "<error_type>" "$RUN_ID"` on failure.
+
+**`<output_summary>` is required, not optional cosmetic detail.** It is a 1-2 SENTENCE, human-readable description of what the dispatched agent actually did or found — extract it from the agent's own final response (every agent should state this plainly at the end of its output; if it didn't, summarize its result yourself in 1-2 sentences rather than leaving this empty). Examples: `"Implemented the /dashboard aggregation endpoint with per-course grouping; 2 files changed."`, `"FAILED requirements validation: 2/5 acceptance criteria unmet — missing course-filter query param and no test coverage for empty-course case."` This is the one field that makes `agent_runs` legible to a human without re-reading the whole transcript, and it is what `orchestration:execution-ledger`'s per-task report renders next to each agent in its call table — leaving it empty degrades that report back to "agent X ran, status success," which is exactly the illegible state this field exists to fix.
 
 **Step 1 - Implementation:** Select model based on task complexity and failure count.
+
+**Your prompt to the implementer MUST state the self-review requirement explicitly — do not rely on the implementer already knowing it, and do not rely on the Quality Gate Enforcer's FAIL-response text to teach it after the fact on iteration 2.** Without this line, the self-review gate (Step 2 below) predictably fails on every task's first attempt, since no implementer agent's own file proactively references `agents/templates/base-agent.md`'s SELF-REVIEW REQUIREMENT — that costs a full wasted iteration on every task, every time, and depends on the failure-feedback loop working correctly to ever self-correct. Include a line like the one below in every implementation dispatch prompt:
+
 ```
 Task({
   subagent_type: "{suggested_agent}",
   model: "sonnet",  // Start here. Escalate to "opus" after 2 failures.
-  prompt: "... task description, acceptance criteria, failure context ..."
+  prompt: "... task description, acceptance criteria, failure context ...
+
+    Before you finish, you MUST emit a [TASK-XXX-COMPLETION] self-review
+    report per agents/templates/base-agent.md's SELF-REVIEW REQUIREMENT --
+    answering, with specific evidence: did you implement the requested
+    behavior, did you check for regressions, did you consider edge cases.
+    Generic answers ('looks good', 'N/A') will fail validation. This is
+    checked before anything else by the next steps in this pipeline."
 })
 ```
 
@@ -417,11 +429,11 @@ Close out the run (`log_agent_completed`/`log_agent_failed`) once the council re
 ### Post-Bug Council Workflow
 
 After Bug Council completes diagnosis:
-1. Read the Bug Council output (root cause, recommended fix, test cases)
-2. Spawn a NEW implementation attempt using the recommended fix approach
+1. Read the Bug Council output (root cause, `recommended_fix`, test cases)
+2. Spawn a NEW implementation attempt as `subagent_type: recommended_fix.suggested_agent` (the Bug Council resolves this from its own Language-to-Agent Mapping table against `recommended_fix.primary.location` — use it directly, don't re-derive it yourself)
 3. Use `model: "opus"` for this implementation (the task has proven complex)
 4. Include the Bug Council diagnosis in the implementation prompt
-5. Run quality gates on the new implementation as normal
+5. Run the FULL normal loop on this new implementation exactly as for any other attempt — scope-validator, quality-gate-enforcer (including the self-review report gate), requirements-validator, workflow-compliance — Bug Council diagnosed the problem, it did not exempt this attempt from any gate
 6. If this attempt also fails, HALT the task with status "blocked" and report to sprint-orchestrator
 
 ## State Management
